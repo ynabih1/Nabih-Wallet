@@ -580,12 +580,18 @@ fun AddCategoryDialog(
     var showIconPicker by remember { mutableStateOf(false) }
 
     val presetColors = listOf(
-        0xFF1E293B, // Dark Slate Black
-        0xFF0F172A, // Deep Obsidian Black
-        0xFF000000, // Pure Black
-        0xFF334155, // Charcoal Black
-        0xFF475569, // Slate Gray
-        0xFF27272A  // Zinc Black
+        0xFFC25E40, // Warm Terracotta
+        0xFF388E3C, // Fresh Forest Green
+        0xFF2E7D32, // Deep Emerald
+        0xFFE06D3B, // Warm Coral Amber
+        0xFFC97A3E, // Warm Bronze
+        0xFF2E6B9E, // Sapphire Slate
+        0xFFA6445B, // Berry Rose
+        0xFF00897B, // Teal Pine
+        0xFF7E4A82, // Plum Violet
+        0xFF1976D2, // Ocean Blue
+        0xFF455A64, // Slate Charcoal
+        0xFF6D685E  // Warm Taupe
     )
 
     Dialog(onDismissRequest = onDismiss) {

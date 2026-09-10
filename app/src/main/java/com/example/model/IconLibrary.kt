@@ -49,7 +49,7 @@ object IconLibrary {
         IconItem("bakery", "مخبوزات وحلويات", "Bakery", IconCategoryGroup.FOOD, Icons.Default.BakeryDining),
         IconItem("lunch", "غداء", "Lunch", IconCategoryGroup.FOOD, Icons.Default.LunchDining),
         IconItem("dinner", "عشاء فاخر", "Dinner", IconCategoryGroup.FOOD, Icons.Default.DinnerDining),
-        IconItem("grocery", "بقالة وسوبرماركت", "Groceries", IconCategoryGroup.FOOD, Icons.Default.LocalGroceryStore),
+        IconItem("grocery", "بقالة", "Groceries", IconCategoryGroup.FOOD, Icons.Default.LocalGroceryStore),
         IconItem("ice_cream", "آيس كريم ومثلجات", "Ice Cream", IconCategoryGroup.FOOD, Icons.Default.Icecream),
         IconItem("bar", "مشروبات", "Beverages", IconCategoryGroup.FOOD, Icons.Default.LocalBar),
 

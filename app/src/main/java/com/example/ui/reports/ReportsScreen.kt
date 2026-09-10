@@ -445,6 +445,8 @@ fun TransactionsPdfTablePreview(
                 .clip(RoundedCornerShape(6.dp))
                 .border(0.7.dp, borderColor, RoundedCornerShape(6.dp))
         ) {
+            val amountHeader = if (currencySymbol.isNotBlank()) "المبلغ ($currencySymbol)" else "المبلغ"
+
             // Table Header
             Row(
                 modifier = Modifier
@@ -455,7 +457,7 @@ fun TransactionsPdfTablePreview(
             ) {
                 Text("م", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 10.5.sp, modifier = Modifier.width(22.dp), textAlign = TextAlign.Center)
                 Text("البيان", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 10.5.sp, modifier = Modifier.weight(1.3f))
-                Text("المبلغ ($currencySymbol)", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 10.5.sp, modifier = Modifier.weight(1.1f), textAlign = TextAlign.Center)
+                Text(amountHeader, color = Color.White, fontWeight = FontWeight.Bold, fontSize = 10.5.sp, modifier = Modifier.weight(1.1f), textAlign = TextAlign.Center)
                 Text("النسبة", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 10.5.sp, modifier = Modifier.width(42.dp), textAlign = TextAlign.Center)
                 Text("ملاحظات", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 10.5.sp, modifier = Modifier.weight(1f))
             }
@@ -496,6 +498,7 @@ fun TransactionsPdfTablePreview(
                 }
 
                 // Table Summary Row
+                val totalAmountFormatted = if (currencySymbol.isNotBlank()) "${Formatters.formatMoney(totalExpenses)} $currencySymbol" else Formatters.formatMoney(totalExpenses)
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -512,7 +515,7 @@ fun TransactionsPdfTablePreview(
                         fontSize = 11.sp
                     )
                     Text(
-                        text = "${Formatters.formatMoney(totalExpenses)} $currencySymbol",
+                        text = totalAmountFormatted,
                         color = textDark,
                         fontWeight = FontWeight.Bold,
                         fontSize = 11.sp
@@ -526,6 +529,8 @@ fun TransactionsPdfTablePreview(
         HorizontalDivider(color = borderColor, thickness = 0.7.dp)
         Spacer(modifier = Modifier.height(12.dp))
 
+        val currSuffix = if (currencySymbol.isNotBlank()) " $currencySymbol" else ""
+
         Text(
             text = "الملخص",
             style = MaterialTheme.typography.titleMedium,
@@ -534,7 +539,7 @@ fun TransactionsPdfTablePreview(
         )
         Spacer(modifier = Modifier.height(6.dp))
         Text(
-            text = "• إجمالي المصروفات خلال الفترة: ${Formatters.formatMoney(totalExpenses)} $currencySymbol",
+            text = "• إجمالي المصروفات خلال الفترة: ${Formatters.formatMoney(totalExpenses)}$currSuffix",
             style = MaterialTheme.typography.bodySmall,
             color = textDark
         )
@@ -543,7 +548,7 @@ fun TransactionsPdfTablePreview(
         val monthlyAvg = totalExpenses / monthsCount
         Spacer(modifier = Modifier.height(4.dp))
         Text(
-            text = "• متوسط الإنفاق الشهري: ${Formatters.formatMoney(monthlyAvg)} $currencySymbol / شهر",
+            text = "• متوسط الإنفاق الشهري: ${Formatters.formatMoney(monthlyAvg)}$currSuffix / شهر",
             style = MaterialTheme.typography.bodySmall,
             color = textDark
         )

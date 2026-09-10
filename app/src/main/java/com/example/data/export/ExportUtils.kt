@@ -32,8 +32,7 @@ val TransactionEntity.paymentMethodId: String get() = paymentMethod
 val TransactionEntity.note: String? get() = notes
 
 /**
- * موديل بسيط لسجل دين واحد (مستحق لي أو عليّ). عدّل الحقول دي لو عندك
- * DebtEntity فعلي في قاعدة بيانات Room بأسماء مختلفة.
+ * موديل بسيط لسجل دين واحد (مستحق لي أو عليّ).
  */
 data class DebtRecord(
     val personName: String,
@@ -60,39 +59,35 @@ fun DebtWithPayments.toDebtRecord(): DebtRecord {
 object ExportUtils {
 
     // ---------------------------------------------------------------
-    // إصلاح مشكلة النص العربي/الأرقام المقلوبة (Bidi)
+    // معالجة نصوص Bidi واللغة العربية والأرقام
     // ---------------------------------------------------------------
-    // canvas.drawText() تطبّق خوارزمية Unicode Bidi تلقائيًا. لما النص
-    // يبدأ برقم (LTR ضعيف) ويتبعه كلمة عربية (RTL قوي)، تتفسر الفقرة
-    // ككل كـ RTL فتنعكس الأرقام. الحل: نغلّف كل جزء نص بعزل اتجاه
-    // صريح عبر BidiFormatter قبل تمريره لـ drawText.
-
     private val bidiFormatter = BidiFormatter.getInstance(true) // strong RTL context
 
     /**
-     * يرسم نصًا عربيًا (قد يحتوي أرقامًا) مع فرض اتجاه RTL صحيح.
-     */
-    private fun drawArabicText(canvas: android.graphics.Canvas, text: String, x: Float, y: Float, paint: TextPaint) {
-        val wrapped = bidiFormatter.unicodeWrap(text, TextDirectionHeuristicsCompat.RTL)
-        canvas.drawText(wrapped, x, y, paint)
-    }
-
-    /**
-     * يرسم نصًا رقميًا/إنجليزيًا مع فرض اتجاه LTR صحيح (يمنع انعكاس الأرقام
-     * حتى لو كان مجاورًا لنص عربي في نفس السطر).
-     */
-    private fun drawLtrText(canvas: android.graphics.Canvas, text: String, x: Float, y: Float, paint: TextPaint) {
-        val wrapped = bidiFormatter.unicodeWrap(text, TextDirectionHeuristicsCompat.LTR)
-        canvas.drawText(wrapped, x, y, paint)
-    }
-
-    /**
-     * يرسم نصًا عربيًا محاذى لليمين (بحيث تنتهي حافته اليمنى عند x).
+     * يرسم نصًا عربيًا مع فرض اتجاه RTL صحيح، محاذى لليمين عند rightX
      */
     private fun drawArabicTextRightAligned(canvas: android.graphics.Canvas, text: String, rightX: Float, y: Float, paint: TextPaint) {
         val wrapped = bidiFormatter.unicodeWrap(text, TextDirectionHeuristicsCompat.RTL)
         val width = paint.measureText(wrapped)
         canvas.drawText(wrapped, rightX - width, y, paint)
+    }
+
+    /**
+     * يرسم نصًا عربيًا في المنتصف حول centerX
+     */
+    private fun drawArabicTextCentered(canvas: android.graphics.Canvas, text: String, centerX: Float, y: Float, paint: TextPaint) {
+        val wrapped = bidiFormatter.unicodeWrap(text, TextDirectionHeuristicsCompat.RTL)
+        val width = paint.measureText(wrapped)
+        canvas.drawText(wrapped, centerX - (width / 2f), y, paint)
+    }
+
+    /**
+     * يرسم نصًا رقميًا/إنجليزيًا مع فرض اتجاه LTR في المنتصف حول centerX
+     */
+    private fun drawLtrTextCentered(canvas: android.graphics.Canvas, text: String, centerX: Float, y: Float, paint: TextPaint) {
+        val wrapped = bidiFormatter.unicodeWrap(text, TextDirectionHeuristicsCompat.LTR)
+        val width = paint.measureText(wrapped)
+        canvas.drawText(wrapped, centerX - (width / 2f), y, paint)
     }
 
     /**
@@ -108,13 +103,10 @@ object ExportUtils {
         share: Boolean = false
     ): File? {
         if (transactions.isEmpty()) {
-            Toast.makeText(context, "لا توجد معاملات للتصدير / No transactions to export", Toast.LENGTH_SHORT).show()
+            Toast.makeText(context, "لا توجد معاملات للتصدير", Toast.LENGTH_SHORT).show()
             return null
         }
 
-        // خط عربي مخصص (اختياري). لو أضفت ملفات Cairo-Regular.ttf و
-        // Cairo-Bold.ttf داخل res/font/ سيتم استخدامها تلقائيًا، وإلا
-        // سيتم الرجوع للخط الافتراضي بأمان.
         val arabicRegular = loadArabicTypeface(context, Typeface.NORMAL)
         val arabicBold = loadArabicTypeface(context, Typeface.BOLD)
 
@@ -122,6 +114,8 @@ object ExportUtils {
         val pageWidth = 595 // A4 standard width in points
         val pageHeight = 842 // A4 standard height in points
         val margin = 40f
+        val contentRightX = pageWidth - margin // 555f
+        val contentLeftX = margin // 40f
 
         var pageNumber = 1
         var pageInfo = PdfDocument.PageInfo.Builder(pageWidth, pageHeight, pageNumber).create()
@@ -130,9 +124,7 @@ object ExportUtils {
 
         // ---------------- ألوان التصميم: لوحة دافئة احترافية ----------------
         val primary = Color.parseColor("#B4622F")        // برتقالي محروق دافئ — رأس الجدول والعناوين
-        val primaryDeep = Color.parseColor("#6B4226")     // بني دافئ غامق للعنوان الفرعي
-        val rowAlt = Color.parseColor("#FBF7F0")          // صف فاتح متبادل (كريمي هادئ)
-        val rowWhite = Color.WHITE
+        val rowAlt = Color.parseColor("#FBF7F0")          // صف فاتح متبادل
         val totalRowBg = Color.parseColor("#F3E4D3")      // صف الإجمالي
         val borderColor = Color.parseColor("#E7DFD2")
         val textDark = Color.parseColor("#2B2620")
@@ -144,10 +136,7 @@ object ExportUtils {
         val borderPaint = Paint().apply { color = borderColor; style = Paint.Style.STROKE; strokeWidth = 0.7f; isAntiAlias = true }
 
         val titlePaint = TextPaint().apply {
-            color = textDark; textSize = 19f; typeface = arabicBold; isAntiAlias = true
-        }
-        val subtitlePaint = TextPaint().apply {
-            color = primaryDeep; textSize = 12.5f; typeface = arabicBold; isAntiAlias = true
+            color = textDark; textSize = 18.5f; typeface = arabicBold; isAntiAlias = true
         }
         val metaPaint = TextPaint().apply {
             color = textMuted; textSize = 10.5f; typeface = arabicRegular; isAntiAlias = true
@@ -162,7 +151,7 @@ object ExportUtils {
             color = Color.WHITE; textSize = 10.5f; typeface = arabicBold; isAntiAlias = true
         }
         val sectionHeaderPaint = TextPaint().apply {
-            color = textDark; textSize = 14f; typeface = arabicBold; isAntiAlias = true
+            color = textDark; textSize = 13.5f; typeface = arabicBold; isAntiAlias = true
         }
         val footerPaint = TextPaint().apply {
             color = textMuted; textSize = 9f; typeface = arabicRegular; isAntiAlias = true
@@ -172,14 +161,11 @@ object ExportUtils {
         val totalIncome = transactions.filter { it.type == "INCOME" }.sumOf { it.amount }
         val totalExpense = transactions.filter { it.type == "EXPENSE" }.sumOf { it.amount }
 
-        // تجميع المصروفات حسب الفئة (نفس منطق التقرير المرجعي: بيان + مبلغ + نسبة)
-        // عمود الملاحظات يعرض الملاحظات الفعلية التي كتبها المستخدم (وليس عدد العمليات)
         data class CategoryRow(val name: String, val amount: Double, val note: String)
         val expenseByCategory = transactions
             .filter { it.type == "EXPENSE" }
             .groupBy { it.categoryName }
             .map { (name, items) ->
-                // نجمع الملاحظات الفعلية غير الفارغة لكل عمليات هذه الفئة، بدون تكرار
                 val distinctNotes = items.mapNotNull { it.note?.trim() }
                     .filter { it.isNotEmpty() }
                     .distinct()
@@ -190,43 +176,45 @@ object ExportUtils {
 
         var currentY: Float
 
-        // --- HEADER (بدون اسم التطبيق فوق — يظهر فقط في التذييل أسفل الصفحة) ---
-        drawArabicText(canvas, "تقرير: بيان المصروفات الشخصية", margin, margin + 16f, titlePaint)
+        // --- HEADER (محاذاة يمين كاملة لتقرير عربي احترافي) ---
+        drawArabicTextRightAligned(canvas, "تقرير: بيان المصروفات الشخصية", contentRightX, margin + 16f, titlePaint)
 
-        currentY = margin + 46f
-        drawArabicText(canvas, "الفترة: $periodName", margin, currentY, metaPaint)
+        currentY = margin + 44f
+        drawArabicTextRightAligned(canvas, "الفترة: $periodName", contentRightX, currentY, metaPaint)
         currentY += 19f
-        drawArabicText(canvas, "تاريخ إصدار التقرير: ${SimpleDateFormat("d MMMM yyyy", Locale("ar")).format(Date())}", margin, currentY, metaPaint)
+        drawArabicTextRightAligned(canvas, "تاريخ إصدار التقرير: ${SimpleDateFormat("d MMMM yyyy", Locale("ar")).format(Date())}", contentRightX, currentY, metaPaint)
         currentY += 19f
-        drawArabicText(canvas, "عدد البنود: ${expenseByCategory.size}", margin, currentY, metaPaint)
+        drawArabicTextRightAligned(canvas, "عدد البنود: ${expenseByCategory.size}", contentRightX, currentY, metaPaint)
 
-        currentY += 38f
+        currentY += 34f
 
-        // --- TABLE: م | البيان | المبلغ (جنيه) | النسبة | ملاحظات ---
-        // ترتيب الأعمدة من اليمين لليسار
-        val colNumRightX = pageWidth - margin - 8f
-        val colNameRightX = colNumRightX - 30f
-        val colAmountRightX = colNameRightX - 190f
-        val colPercentRightX = colAmountRightX - 90f
-        val colNoteRightX = colPercentRightX - 55f
+        // --- أعمدة الجدول (RTL دقيق مع مسافات متناسقة) ---
+        // عرض الجدول الكلي = 515f (من 40 إلى 555)
+        // العمود 1 (م): 555 إلى 525 (عرض 30) -> المركز 540
+        // العمود 2 (البيان): 525 إلى 365 (عرض 160) -> محاذاة يمين عند 517
+        // العمود 3 (المبلغ): 365 إلى 265 (عرض 100) -> المركز 315
+        // العمود 4 (النسبة): 265 إلى 205 (عرض 60) -> المركز 235
+        // العمود 5 (ملاحظات): 205 إلى 40 (عرض 165) -> محاذاة يمين عند 197
 
-        val colNumLeftBound = colNumRightX - 30f
-        val colNameLeftBound = colAmountRightX
-        val colAmountLeftBound = colPercentRightX
-        val colPercentLeftBound = colNoteRightX
-        val colNoteLeftBound = margin
+        val col1Center = 540f
+        val col2Right = 517f
+        val col3Center = 315f
+        val col4Center = 235f
+        val col5Right = 197f
 
         val rowHeight = 32f
         val headerRowHeight = 30f
 
+        val amountHeader = if (currencySymbol.isNotBlank()) "المبلغ ($currencySymbol)" else "المبلغ"
+
         fun drawTableHeaderRow(y: Float) {
-            canvas.drawRect(margin, y, pageWidth - margin, y + headerRowHeight, primaryFillPaint)
+            canvas.drawRect(contentLeftX, y, contentRightX, y + headerRowHeight, primaryFillPaint)
             val ty = y + headerRowHeight / 2f + 3.5f
-            drawArabicTextRightAligned(canvas, "م", colNumRightX, ty, headerTextPaint)
-            drawArabicTextRightAligned(canvas, "البيان", colNameRightX, ty, headerTextPaint)
-            drawArabicTextRightAligned(canvas, "المبلغ ($currencySymbol)", colAmountRightX, ty, headerTextPaint)
-            drawArabicTextRightAligned(canvas, "النسبة", colPercentRightX, ty, headerTextPaint)
-            drawArabicTextRightAligned(canvas, "ملاحظات", colNoteRightX, ty, headerTextPaint)
+            drawArabicTextCentered(canvas, "م", col1Center, ty, headerTextPaint)
+            drawArabicTextRightAligned(canvas, "البيان", col2Right, ty, headerTextPaint)
+            drawArabicTextCentered(canvas, amountHeader, col3Center, ty, headerTextPaint)
+            drawArabicTextCentered(canvas, "النسبة", col4Center, ty, headerTextPaint)
+            drawArabicTextRightAligned(canvas, "ملاحظات", col5Right, ty, headerTextPaint)
         }
 
         drawTableHeaderRow(currentY)
@@ -248,31 +236,40 @@ object ExportUtils {
 
             val bg = if (index % 2 == 1) rowAltPaint else null
             if (bg != null) {
-                canvas.drawRect(margin, currentY, pageWidth - margin, currentY + rowHeight, bg)
+                canvas.drawRect(contentLeftX, currentY, contentRightX, currentY + rowHeight, bg)
             }
-            canvas.drawRect(margin, currentY, pageWidth - margin, currentY + rowHeight, borderPaint)
+            canvas.drawRect(contentLeftX, currentY, contentRightX, currentY + rowHeight, borderPaint)
 
             val percent = if (totalExpense > 0) (row.amount / totalExpense) * 100.0 else 0.0
             val ty = currentY + rowHeight / 2f + 3.5f
 
-            drawArabicTextRightAligned(canvas, "${index + 1}", colNumRightX, ty, textPaint)
-            val nameStr = TextUtils.ellipsize(row.name, boldTextPaint, 175f, TextUtils.TruncateAt.END).toString()
-            drawArabicTextRightAligned(canvas, nameStr, colNameRightX, ty, boldTextPaint)
-            drawLtrText(canvas, String.format(Locale.US, "%,.2f", row.amount), colAmountRightX - 85f, ty, textPaint)
-            drawLtrText(canvas, String.format(Locale.US, "%.1f%%", percent), colPercentRightX - 40f, ty, textPaint)
-            val noteStr = TextUtils.ellipsize(row.note, textPaint, 90f, TextUtils.TruncateAt.END).toString()
-            drawArabicTextRightAligned(canvas, noteStr, colNoteRightX, ty, textPaint)
+            // 1. م
+            drawArabicTextCentered(canvas, "${index + 1}", col1Center, ty, textPaint)
+            // 2. البيان
+            val nameStr = TextUtils.ellipsize(row.name, boldTextPaint, 144f, TextUtils.TruncateAt.END).toString()
+            drawArabicTextRightAligned(canvas, nameStr, col2Right, ty, boldTextPaint)
+            // 3. المبلغ
+            val amountStr = String.format(Locale.US, "%,.2f", row.amount)
+            drawLtrTextCentered(canvas, amountStr, col3Center, ty, textPaint)
+            // 4. النسبة
+            val pctStr = String.format(Locale.US, "%.1f%%", percent)
+            drawLtrTextCentered(canvas, pctStr, col4Center, ty, textPaint)
+            // 5. ملاحظات
+            val noteDisplay = row.note.ifBlank { "-" }
+            val noteStr = TextUtils.ellipsize(noteDisplay, textPaint, 150f, TextUtils.TruncateAt.END).toString()
+            drawArabicTextRightAligned(canvas, noteStr, col5Right, ty, textPaint)
 
             currentY += rowHeight
         }
 
         // صف الإجمالي
-        canvas.drawRect(margin, currentY, pageWidth - margin, currentY + rowHeight, totalRowPaint)
-        canvas.drawRect(margin, currentY, pageWidth - margin, currentY + rowHeight, borderPaint)
+        canvas.drawRect(contentLeftX, currentY, contentRightX, currentY + rowHeight, totalRowPaint)
+        canvas.drawRect(contentLeftX, currentY, contentRightX, currentY + rowHeight, borderPaint)
         val totalTy = currentY + rowHeight / 2f + 3.5f
-        drawArabicTextRightAligned(canvas, "إجمالي المصروفات", colNameRightX, totalTy, boldTextPaint)
-        drawLtrText(canvas, String.format(Locale.US, "%,.2f $currencySymbol", totalExpense), colAmountRightX - 100f, totalTy, boldTextPaint)
-        currentY += rowHeight + 30f
+        drawArabicTextRightAligned(canvas, "إجمالي المصروفات", col2Right, totalTy, boldTextPaint)
+        val totalAmountFormatted = String.format(Locale.US, "%,.2f", totalExpense)
+        drawLtrTextCentered(canvas, totalAmountFormatted, col3Center, totalTy, boldTextPaint)
+        currentY += rowHeight + 26f
 
         // --- قسم الملخص ---
         if (currentY + 140f > maxRowY) {
@@ -284,23 +281,23 @@ object ExportUtils {
             currentY = margin + 10f
         }
 
-        // خط فاصل رفيع قبل قسم الملخص
         val dividerPaint = Paint().apply { color = borderColor; strokeWidth = 0.7f; isAntiAlias = true }
-        canvas.drawLine(margin, currentY - 12f, pageWidth - margin, currentY - 12f, dividerPaint)
+        canvas.drawLine(contentLeftX, currentY - 10f, contentRightX, currentY - 10f, dividerPaint)
 
-        drawArabicText(canvas, "الملخص", margin, currentY, sectionHeaderPaint)
-        currentY += 26f
+        drawArabicTextRightAligned(canvas, "الملخص", contentRightX, currentY, sectionHeaderPaint)
+        currentY += 24f
 
         val avgMonthly = if (totalExpense > 0) totalExpense / 12.0 else 0.0
         val topRow = expenseByCategory.firstOrNull()
         val bottomRow = expenseByCategory.lastOrNull()
+        val currSuffix = if (currencySymbol.isNotBlank()) " $currencySymbol" else ""
 
         val summaryLines = mutableListOf(
-            "إجمالي المصروفات خلال الفترة: ${String.format(Locale.US, "%,.2f", totalExpense)} $currencySymbol",
-            "متوسط الإنفاق الشهري: ${String.format(Locale.US, "%,.2f", avgMonthly)} $currencySymbol / شهر"
+            "إجمالي المصروفات خلال الفترة: ${String.format(Locale.US, "%,.2f", totalExpense)}$currSuffix",
+            "متوسط الإنفاق الشهري: ${String.format(Locale.US, "%,.2f", avgMonthly)}$currSuffix / شهر"
         )
         if (totalIncome > 0) {
-            summaryLines.add("إجمالي الدخل خلال الفترة: ${String.format(Locale.US, "%,.2f", totalIncome)} $currencySymbol")
+            summaryLines.add("إجمالي الدخل خلال الفترة: ${String.format(Locale.US, "%,.2f", totalIncome)}$currSuffix")
         }
         if (topRow != null) {
             val topPct = if (totalExpense > 0) (topRow.amount / totalExpense) * 100.0 else 0.0
@@ -313,26 +310,22 @@ object ExportUtils {
 
         val bulletPaint = Paint().apply { color = primary; style = Paint.Style.FILL; isAntiAlias = true }
         summaryLines.forEach { line ->
-            // نقطة تمييز صغيرة بلون التصميم بدل نص عادي بحت
-            canvas.drawCircle(pageWidth - margin - 3f, currentY - 3.5f, 2.2f, bulletPaint)
-            drawArabicText(canvas, line, margin, currentY, textPaint)
-            currentY += 21f
+            // نقطة التعداد بجوار بداية السطر العربي من اليمين مباشرة
+            canvas.drawCircle(contentRightX - 4f, currentY - 3.5f, 2.2f, bulletPaint)
+            drawArabicTextRightAligned(canvas, line, contentRightX - 14f, currentY, textPaint)
+            currentY += 20f
         }
 
         currentY += 16f
-        // اسم التطبيق يظهر فقط هنا في التذييل، وليس أعلى الصفحة
-        drawArabicText(canvas, "تم إنشاء هذا التقرير بواسطة Nabih Wallet", margin, currentY, footerPaint)
-
-        // --- تذييل رقم الصفحة ---
-        drawLtrText(canvas, "Page $pageNumber", margin, pageHeight - 24f, footerPaint)
+        drawArabicTextCentered(canvas, "تم إنشاء هذا التقرير بواسطة Nabih Wallet", pageWidth / 2f, currentY, footerPaint)
+        drawLtrTextCentered(canvas, "Page $pageNumber", pageWidth / 2f, pageHeight - 24f, footerPaint)
 
         document.finishPage(page)
 
-        // Save PDF to Storage
         val fileName = "Nabih_Wallet_Report_${System.currentTimeMillis()}.pdf"
         val pdfFile = File(context.cacheDir, fileName)
 
-        try {
+        return try {
             document.writeTo(FileOutputStream(pdfFile))
             document.close()
 
@@ -341,17 +334,16 @@ object ExportUtils {
             } else {
                 saveToDownloads(context, pdfFile, fileName, "application/pdf")
             }
-            return pdfFile
+            pdfFile
         } catch (e: Exception) {
             e.printStackTrace()
             Toast.makeText(context, "فشل في حفظ ملف PDF: ${e.message}", Toast.LENGTH_LONG).show()
-            return null
+            null
         }
     }
 
     /**
-     * يحاول تحميل خط عربي مخصص من res/font (لو تم إضافته).
-     * لو غير موجود، يرجع للخط الافتراضي بأمان دون أي كراش.
+     * تحميل خط عربي مخصص من res/font.
      */
     private fun loadArabicTypeface(context: Context, style: Int): Typeface {
         return try {
@@ -371,7 +363,7 @@ object ExportUtils {
     }
 
     /**
-     * Exports transactions to CSV format and saves or shares.
+     * تصدير المعاملات إلى CSV
      */
     fun exportCsvReport(
         context: Context,
@@ -388,7 +380,6 @@ object ExportUtils {
         val csvHeader = "ID,Type,Category,Amount,Currency,Date,Payment Method,Note\n"
 
         val sb = StringBuilder()
-        // BOM حتى يفتح إكسل الملف بترميز UTF-8 صحيح ويظهر العربي سليمًا
         sb.append('\uFEFF')
         sb.append(csvHeader)
 
@@ -402,26 +393,23 @@ object ExportUtils {
         val fileName = "Nabih_Wallet_${System.currentTimeMillis()}.csv"
         val csvFile = File(context.cacheDir, fileName)
 
-        try {
+        return try {
             csvFile.writeText(sb.toString(), Charsets.UTF_8)
-
             if (share) {
                 shareFile(context, csvFile, "text/csv")
             } else {
                 saveToDownloads(context, csvFile, fileName, "text/csv")
             }
-            return csvFile
+            csvFile
         } catch (e: Exception) {
             e.printStackTrace()
             Toast.makeText(context, "فشل حفظ ملف CSV: ${e.message}", Toast.LENGTH_LONG).show()
-            return null
+            null
         }
     }
 
     /**
      * Generates a styled PDF report for debts (owed to me / I owe) and saves/shares it.
-     * نفس اللوحة الدافئة المستخدمة في تقرير المصروفات، من غير اسم التطبيق
-     * فوق — يظهر فقط في التذييل أسفل الصفحة.
      */
     fun exportDebtsPdfReport(
         context: Context,
@@ -440,16 +428,16 @@ object ExportUtils {
         val pageWidth = 595
         val pageHeight = 842
         val margin = 40f
+        val contentRightX = pageWidth - margin // 555f
+        val contentLeftX = margin // 40f
 
         var pageNumber = 1
         var pageInfo = PdfDocument.PageInfo.Builder(pageWidth, pageHeight, pageNumber).create()
         var page = document.startPage(pageInfo)
         var canvas = page.canvas
 
-        // ---------------- نفس اللوحة الدافئة المستخدمة في تقرير المصروفات ----------------
         val primary = Color.parseColor("#B4622F")
         val rowAlt = Color.parseColor("#FBF7F0")
-        val totalBg = Color.parseColor("#F3E4D3")
         val borderColor = Color.parseColor("#E7DFD2")
         val textDark = Color.parseColor("#2B2620")
         val textMuted = Color.parseColor("#8A8171")
@@ -458,21 +446,20 @@ object ExportUtils {
 
         val primaryFillPaint = Paint().apply { color = primary; style = Paint.Style.FILL; isAntiAlias = true }
         val rowAltPaint = Paint().apply { color = rowAlt; style = Paint.Style.FILL; isAntiAlias = true }
-        val totalBgPaint = Paint().apply { color = totalBg; style = Paint.Style.FILL; isAntiAlias = true }
         val cardBgPaint = Paint().apply { color = rowAlt; style = Paint.Style.FILL; isAntiAlias = true }
         val borderPaint = Paint().apply { color = borderColor; style = Paint.Style.STROKE; strokeWidth = 0.7f; isAntiAlias = true }
         val dividerPaint = Paint().apply { color = borderColor; strokeWidth = 0.7f; isAntiAlias = true }
 
-        val titlePaint = TextPaint().apply { color = textDark; textSize = 19f; typeface = arabicBold; isAntiAlias = true }
+        val titlePaint = TextPaint().apply { color = textDark; textSize = 18.5f; typeface = arabicBold; isAntiAlias = true }
         val metaPaint = TextPaint().apply { color = textMuted; textSize = 10.5f; typeface = arabicRegular; isAntiAlias = true }
         val textPaint = TextPaint().apply { color = textDark; textSize = 10.5f; typeface = arabicRegular; isAntiAlias = true }
         val boldTextPaint = TextPaint().apply { color = textDark; textSize = 10.5f; typeface = arabicBold; isAntiAlias = true }
         val headerTextPaint = TextPaint().apply { color = Color.WHITE; textSize = 10.5f; typeface = arabicBold; isAntiAlias = true }
-        val sectionHeaderPaint = TextPaint().apply { color = textDark; textSize = 14f; typeface = arabicBold; isAntiAlias = true }
+        val sectionHeaderPaint = TextPaint().apply { color = textDark; textSize = 13.5f; typeface = arabicBold; isAntiAlias = true }
         val footerPaint = TextPaint().apply { color = textMuted; textSize = 9f; typeface = arabicRegular; isAntiAlias = true }
         val cardLabelPaint = TextPaint().apply { color = textMuted; textSize = 9.5f; typeface = arabicRegular; isAntiAlias = true }
-        val positiveAmountPaint = TextPaint().apply { color = greenPositive; textSize = 13f; typeface = arabicBold; isAntiAlias = true }
-        val negativeAmountPaint = TextPaint().apply { color = redNegative; textSize = 13f; typeface = arabicBold; isAntiAlias = true }
+        val positiveAmountPaint = TextPaint().apply { color = greenPositive; textSize = 12.5f; typeface = arabicBold; isAntiAlias = true }
+        val negativeAmountPaint = TextPaint().apply { color = redNegative; textSize = 12.5f; typeface = arabicBold; isAntiAlias = true }
 
         val totalOwedToMe = debts.filter { it.type == "LENT" }.sumOf { it.remainingAmount }
         val totalIOwe = debts.filter { it.type == "BORROWED" }.sumOf { it.remainingAmount }
@@ -482,13 +469,13 @@ object ExportUtils {
 
         var currentY: Float
 
-        // --- HEADER (بدون اسم التطبيق فوق) ---
-        drawArabicText(canvas, "تقرير: المديونيات", margin, margin + 16f, titlePaint)
+        // --- HEADER (محاذاة يمين كاملة) ---
+        drawArabicTextRightAligned(canvas, "تقرير: المديونيات", contentRightX, margin + 16f, titlePaint)
 
-        currentY = margin + 46f
-        drawArabicText(canvas, "تاريخ إصدار التقرير: ${SimpleDateFormat("d MMMM yyyy", Locale("ar")).format(Date())}", margin, currentY, metaPaint)
+        currentY = margin + 44f
+        drawArabicTextRightAligned(canvas, "تاريخ إصدار التقرير: ${SimpleDateFormat("d MMMM yyyy", Locale("ar")).format(Date())}", contentRightX, currentY, metaPaint)
         currentY += 19f
-        drawArabicText(canvas, "عدد الأشخاص: ${debts.map { it.personName }.distinct().size}", margin, currentY, metaPaint)
+        drawArabicTextRightAligned(canvas, "عدد الأشخاص: ${debts.map { it.personName }.distinct().size}", contentRightX, currentY, metaPaint)
 
         currentY += 34f
 
@@ -496,35 +483,41 @@ object ExportUtils {
         val cardGap = 12f
         val cardWidth = (pageWidth - (margin * 2) - cardGap) / 2
         val cardHeight = 54f
-        val cardRightX = pageWidth - margin - cardWidth  // بطاقة "مستحق لي" على اليمين (RTL)
-        val cardLeftX = margin                            // بطاقة "عليّ" على الشمال
+        val cardRightX = contentRightX - cardWidth  // بطاقة "مستحق لي" على اليمين (RTL)
+        val cardLeftX = contentLeftX               // بطاقة "عليّ" على الشمال
 
+        // بطاقة مستحق لي (يمين)
         canvas.drawRoundRect(cardRightX, currentY, cardRightX + cardWidth, currentY + cardHeight, 8f, 8f, cardBgPaint)
-        drawArabicTextRightAligned(canvas, "إجمالي المستحق لي", cardRightX + cardWidth - 12f, currentY + 22f, cardLabelPaint)
-        drawLtrText(canvas, String.format(Locale.US, "%,.2f جنيه", totalOwedToMe), cardRightX + 12f, currentY + 42f, positiveAmountPaint)
+        drawArabicTextRightAligned(canvas, "إجمالي المستحق لي", cardRightX + cardWidth - 12f, currentY + 20f, cardLabelPaint)
+        drawLtrTextCentered(canvas, String.format(Locale.US, "%,.2f", totalOwedToMe), cardRightX + (cardWidth / 2f), currentY + 40f, positiveAmountPaint)
 
+        // بطاقة إجمالي عليّ (شمال)
         canvas.drawRoundRect(cardLeftX, currentY, cardLeftX + cardWidth, currentY + cardHeight, 8f, 8f, cardBgPaint)
-        drawArabicTextRightAligned(canvas, "إجمالي عليّ", cardLeftX + cardWidth - 12f, currentY + 22f, cardLabelPaint)
-        drawLtrText(canvas, String.format(Locale.US, "%,.2f جنيه", totalIOwe), cardLeftX + 12f, currentY + 42f, negativeAmountPaint)
+        drawArabicTextRightAligned(canvas, "إجمالي عليّ", cardLeftX + cardWidth - 12f, currentY + 20f, cardLabelPaint)
+        drawLtrTextCentered(canvas, String.format(Locale.US, "%,.2f", totalIOwe), cardLeftX + (cardWidth / 2f), currentY + 40f, negativeAmountPaint)
 
-        currentY += cardHeight + 30f
+        currentY += cardHeight + 28f
 
-        // --- TABLE: الاسم | النوع | المبلغ | آخر عملية ---
-        val colNameRightX = pageWidth - margin - 8f
-        val colTypeRightX = colNameRightX - 130f
-        val colAmountRightX = colTypeRightX - 70f
-        val colDateRightX = colAmountRightX - 90f
+        // --- أعمدة جدول الديون (515f) ---
+        // 1. الاسم: 555 إلى 365 (عرض 190) -> محاذاة يمين عند 547
+        // 2. النوع: 365 إلى 275 (عرض 90) -> المركز 320
+        // 3. المبلغ: 275 إلى 165 (عرض 110) -> المركز 220
+        // 4. آخر عملية: 165 إلى 40 (عرض 125) -> المركز 102.5
+        val colDebtNameRight = 547f
+        val colDebtTypeCenter = 320f
+        val colDebtAmountCenter = 220f
+        val colDebtDateCenter = 102.5f
 
         val rowHeight = 32f
         val headerRowHeight = 30f
 
         fun drawTableHeaderRow(y: Float) {
-            canvas.drawRect(margin, y, pageWidth - margin, y + headerRowHeight, primaryFillPaint)
+            canvas.drawRect(contentLeftX, y, contentRightX, y + headerRowHeight, primaryFillPaint)
             val ty = y + headerRowHeight / 2f + 3.5f
-            drawArabicTextRightAligned(canvas, "الاسم", colNameRightX, ty, headerTextPaint)
-            drawArabicTextRightAligned(canvas, "النوع", colTypeRightX, ty, headerTextPaint)
-            drawArabicTextRightAligned(canvas, "المبلغ", colAmountRightX, ty, headerTextPaint)
-            drawArabicTextRightAligned(canvas, "آخر عملية", colDateRightX, ty, headerTextPaint)
+            drawArabicTextRightAligned(canvas, "الاسم", colDebtNameRight, ty, headerTextPaint)
+            drawArabicTextCentered(canvas, "النوع", colDebtTypeCenter, ty, headerTextPaint)
+            drawArabicTextCentered(canvas, "المبلغ", colDebtAmountCenter, ty, headerTextPaint)
+            drawArabicTextCentered(canvas, "آخر عملية", colDebtDateCenter, ty, headerTextPaint)
         }
 
         drawTableHeaderRow(currentY)
@@ -546,23 +539,23 @@ object ExportUtils {
             }
 
             val bg = if (index % 2 == 1) rowAltPaint else null
-            if (bg != null) canvas.drawRect(margin, currentY, pageWidth - margin, currentY + rowHeight, bg)
-            canvas.drawRect(margin, currentY, pageWidth - margin, currentY + rowHeight, borderPaint)
+            if (bg != null) canvas.drawRect(contentLeftX, currentY, contentRightX, currentY + rowHeight, bg)
+            canvas.drawRect(contentLeftX, currentY, contentRightX, currentY + rowHeight, borderPaint)
 
             val ty = currentY + rowHeight / 2f + 3.5f
             val typeLabel = if (debt.type == "LENT") "مستحق لي" else "عليّ"
             val typePaint = if (debt.type == "LENT") TextPaint(boldTextPaint).apply { color = greenPositive } else TextPaint(boldTextPaint).apply { color = redNegative }
-            val nameStr = TextUtils.ellipsize(debt.personName, boldTextPaint, 110f, TextUtils.TruncateAt.END).toString()
+            val nameStr = TextUtils.ellipsize(debt.personName, boldTextPaint, 175f, TextUtils.TruncateAt.END).toString()
 
-            drawArabicTextRightAligned(canvas, nameStr, colNameRightX, ty, boldTextPaint)
-            drawArabicTextRightAligned(canvas, typeLabel, colTypeRightX, ty, typePaint)
-            drawLtrText(canvas, String.format(Locale.US, "%,.2f", debt.remainingAmount), colAmountRightX - 65f, ty, textPaint)
-            drawArabicTextRightAligned(canvas, sdf.format(Date(debt.lastActivityDate)), colDateRightX, ty, textPaint)
+            drawArabicTextRightAligned(canvas, nameStr, colDebtNameRight, ty, boldTextPaint)
+            drawArabicTextCentered(canvas, typeLabel, colDebtTypeCenter, ty, typePaint)
+            drawLtrTextCentered(canvas, String.format(Locale.US, "%,.2f", debt.remainingAmount), colDebtAmountCenter, ty, textPaint)
+            drawArabicTextCentered(canvas, sdf.format(Date(debt.lastActivityDate)), colDebtDateCenter, ty, textPaint)
 
             currentY += rowHeight
         }
 
-        currentY += 30f
+        currentY += 26f
 
         // --- قسم الملخص ---
         if (currentY + 100f > maxRowY) {
@@ -574,12 +567,12 @@ object ExportUtils {
             currentY = margin + 10f
         }
 
-        canvas.drawLine(margin, currentY - 12f, pageWidth - margin, currentY - 12f, dividerPaint)
-        drawArabicText(canvas, "الملخص", margin, currentY, sectionHeaderPaint)
-        currentY += 26f
+        canvas.drawLine(contentLeftX, currentY - 10f, contentRightX, currentY - 10f, dividerPaint)
+        drawArabicTextRightAligned(canvas, "الملخص", contentRightX, currentY, sectionHeaderPaint)
+        currentY += 24f
 
-        val netLabel = if (net >= 0) "الصافي: ${String.format(Locale.US, "%,.2f", net)} جنيه لصالحك"
-                        else "الصافي: ${String.format(Locale.US, "%,.2f", -net)} جنيه عليك"
+        val netLabel = if (net >= 0) "الصافي: ${String.format(Locale.US, "%,.2f", net)} لصالحك"
+                       else "الصافي: ${String.format(Locale.US, "%,.2f", -net)} عليك"
         val summaryLines = listOf(
             netLabel,
             "عدد الديون المتأخرة: $overdueCount"
@@ -587,14 +580,14 @@ object ExportUtils {
 
         val bulletPaint = Paint().apply { color = primary; style = Paint.Style.FILL; isAntiAlias = true }
         summaryLines.forEach { line ->
-            canvas.drawCircle(pageWidth - margin - 3f, currentY - 3.5f, 2.2f, bulletPaint)
-            drawArabicText(canvas, line, margin, currentY, textPaint)
-            currentY += 21f
+            canvas.drawCircle(contentRightX - 4f, currentY - 3.5f, 2.2f, bulletPaint)
+            drawArabicTextRightAligned(canvas, line, contentRightX - 14f, currentY, textPaint)
+            currentY += 20f
         }
 
         currentY += 16f
-        drawArabicText(canvas, "تم إنشاء هذا التقرير بواسطة Nabih Wallet", margin, currentY, footerPaint)
-        drawLtrText(canvas, "Page $pageNumber", margin, pageHeight - 24f, footerPaint)
+        drawArabicTextCentered(canvas, "تم إنشاء هذا التقرير بواسطة Nabih Wallet", pageWidth / 2f, currentY, footerPaint)
+        drawLtrTextCentered(canvas, "Page $pageNumber", pageWidth / 2f, pageHeight - 24f, footerPaint)
 
         document.finishPage(page)
 
@@ -614,6 +607,9 @@ object ExportUtils {
     }
 
     private fun saveToDownloads(context: Context, sourceFile: File, fileName: String, mimeType: String) {
+        var savedUri: Uri? = null
+        var writeSucceeded = false
+
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             val values = ContentValues().apply {
                 put(MediaStore.MediaColumns.DISPLAY_NAME, fileName)
@@ -624,55 +620,79 @@ object ExportUtils {
             val resolver = context.contentResolver
             val uri = resolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, values)
 
-            if (uri == null) {
-                Toast.makeText(context, "فشل إنشاء الملف في مجلد Downloads (تحقق من الصلاحيات)", Toast.LENGTH_LONG).show()
-                return
-            }
-
-            var writeSucceeded = false
-            try {
-                val outputStream = resolver.openOutputStream(uri)
-                if (outputStream == null) {
-                    Toast.makeText(context, "فشل فتح الملف للكتابة (openOutputStream = null)", Toast.LENGTH_LONG).show()
-                    resolver.delete(uri, null, null)
-                    return
-                }
-                outputStream.use { os ->
-                    sourceFile.inputStream().use { inputStream ->
-                        val bytesCopied = inputStream.copyTo(os)
-                        os.flush()
-                        writeSucceeded = bytesCopied > 0
+            if (uri != null) {
+                try {
+                    val outputStream = resolver.openOutputStream(uri)
+                    if (outputStream != null) {
+                        outputStream.use { os ->
+                            sourceFile.inputStream().use { inputStream ->
+                                val bytesCopied = inputStream.copyTo(os)
+                                os.flush()
+                                writeSucceeded = bytesCopied > 0
+                            }
+                        }
                     }
+                    if (writeSucceeded) {
+                        val doneValues = ContentValues().apply { put(MediaStore.MediaColumns.IS_PENDING, 0) }
+                        resolver.update(uri, doneValues, null, null)
+                        savedUri = uri
+                    } else {
+                        resolver.delete(uri, null, null)
+                    }
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                    try { resolver.delete(uri, null, null) } catch (_: Exception) {}
                 }
-            } catch (e: Exception) {
-                e.printStackTrace()
-                Toast.makeText(context, "فشل حفظ الملف: ${e.message}", Toast.LENGTH_LONG).show()
-                resolver.delete(uri, null, null)
-                return
             }
+        }
 
-            if (writeSucceeded) {
-                val doneValues = ContentValues().apply { put(MediaStore.MediaColumns.IS_PENDING, 0) }
-                resolver.update(uri, doneValues, null, null)
-                Toast.makeText(context, "تم حفظ الملف بنجاح في مجلد Downloads\n$fileName", Toast.LENGTH_LONG).show()
-            } else {
-                resolver.delete(uri, null, null)
-                Toast.makeText(context, "فشل حفظ الملف: لم يتم نسخ أي بيانات", Toast.LENGTH_LONG).show()
-            }
-        } else {
+        // مسار احتياطي موثوق للأجهزة والأنظمة المختلفة
+        if (!writeSucceeded) {
             try {
                 val downloadsDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
+                if (!downloadsDir.exists()) downloadsDir.mkdirs()
                 val destFile = File(downloadsDir, fileName)
                 sourceFile.copyTo(destFile, overwrite = true)
                 if (destFile.exists() && destFile.length() > 0) {
-                    Toast.makeText(context, "تم حفظ الملف بنجاح: ${destFile.absolutePath}", Toast.LENGTH_LONG).show()
-                } else {
-                    Toast.makeText(context, "فشل حفظ الملف في: ${destFile.absolutePath}", Toast.LENGTH_LONG).show()
+                    writeSucceeded = true
+                    android.media.MediaScannerConnection.scanFile(
+                        context,
+                        arrayOf(destFile.absolutePath),
+                        arrayOf(mimeType),
+                        null
+                    )
+                    savedUri = FileProvider.getUriForFile(
+                        context,
+                        "${context.packageName}.fileprovider",
+                        destFile
+                    )
                 }
             } catch (e: Exception) {
                 e.printStackTrace()
-                Toast.makeText(context, "فشل حفظ الملف: ${e.message}", Toast.LENGTH_LONG).show()
             }
+        }
+
+        if (writeSucceeded) {
+            Toast.makeText(context, "تم حفظ الملف بنجاح في مجلد Downloads\n$fileName", Toast.LENGTH_LONG).show()
+
+            // فتح الملف تلقائياً لتمكين المستخدم من الاطلاع عليه فوراً
+            try {
+                val openUri = savedUri ?: FileProvider.getUriForFile(
+                    context,
+                    "${context.packageName}.fileprovider",
+                    sourceFile
+                )
+                val viewIntent = Intent(Intent.ACTION_VIEW).apply {
+                    setDataAndType(openUri, mimeType)
+                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                }
+                context.startActivity(viewIntent)
+            } catch (e: Exception) {
+                // إذا لم يتوفر تطبيق لعرض PDF، فالرسالة قد تم إظهارها
+            }
+        } else {
+            Toast.makeText(context, "فشل حفظ الملف في مجلد Downloads", Toast.LENGTH_LONG).show()
         }
     }
 
@@ -687,7 +707,7 @@ object ExportUtils {
             putExtra(Intent.EXTRA_STREAM, uri)
             addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
         }
-        val chooser = Intent.createChooser(intent, "مشاركة التقرير عبر / Share Report via")
+        val chooser = Intent.createChooser(intent, "مشاركة التقرير عبر")
         chooser.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         context.startActivity(chooser)
     }
