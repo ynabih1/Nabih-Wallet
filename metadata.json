@@ -1,0 +1,6 @@
+{
+  "name": "Nabih Wallet",
+  "description": "تطبيق Nabih Wallet لإدارة المصروفات الشخصية ومتابعة الديون والالتزامات المالية مع تصدير تقارير PDF بتصميم دافئ متناسق.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

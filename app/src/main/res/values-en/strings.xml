@@ -1,0 +1,166 @@
+<resources>
+    <string name="app_name">Nabih Wallet</string>
+    <string name="app_tagline">Personal Expenses &amp; Debt Manager</string>
+
+    <!-- Navigation -->
+    <string name="nav_home">Home</string>
+    <string name="nav_reports">Reports</string>
+    <string name="nav_debts">Debts</string>
+    <string name="nav_settings">Settings</string>
+    <string name="nav_add">Add</string>
+
+    <!-- Home & Balance -->
+    <string name="total_balance">Total Balance</string>
+    <string name="income">Income</string>
+    <string name="expense">Expenses</string>
+    <string name="owed_to_me">Owed to Me</string>
+    <string name="i_owe">I Owe</string>
+    <string name="net_debt_balance">Net Debt</string>
+    <string name="recent_transactions">Recent Transactions</string>
+    <string name="see_all">See All</string>
+    <string name="no_transactions_yet">No transactions recorded yet</string>
+    <string name="add_first_transaction">Tap + to record an expense or income</string>
+
+    <!-- Transactions -->
+    <string name="add_transaction">Add Transaction</string>
+    <string name="edit_transaction">Edit Transaction</string>
+    <string name="delete_transaction">Delete Transaction</string>
+    <string name="transaction_type">Transaction Type</string>
+    <string name="amount">Amount</string>
+    <string name="category">Category</string>
+    <string name="payment_method">Payment Method</string>
+    <string name="date">Date</string>
+    <string name="notes">Notes</string>
+    <string name="notes_hint">Add details or notes...</string>
+    <string name="pin_transaction">Pin to top</string>
+    <string name="attach_receipt">Attach receipt - Image or PDF</string>
+    <string name="receipt_attached">Receipt attached</string>
+    <string name="remove_receipt">Remove receipt</string>
+    <string name="view_receipt">View receipt</string>
+    <string name="save">Save</string>
+    <string name="cancel">Cancel</string>
+    <string name="delete">Delete</string>
+    <string name="confirm_delete">Are you sure you want to delete?</string>
+
+    <!-- Categories - Expense -->
+    <string name="cat_living">Living Expenses</string>
+    <string name="cat_study">Education</string>
+    <string name="cat_food">Food &amp; Drinks</string>
+    <string name="cat_transport">Transport</string>
+    <string name="cat_bills">Bills &amp; Utilities</string>
+    <string name="cat_shopping">Shopping</string>
+    <string name="cat_health">Health &amp; Medical</string>
+    <string name="cat_entertainment">Entertainment</string>
+    <string name="cat_other_expense">Other</string>
+
+    <!-- Categories - Income -->
+    <string name="cat_salary">Salary</string>
+    <string name="cat_freelance">Freelance</string>
+    <string name="cat_investment">Investment</string>
+    <string name="cat_bonus">Bonus</string>
+    <string name="cat_gift">Gift</string>
+    <string name="cat_other_income">Other</string>
+
+    <!-- Payment Methods -->
+    <string name="pay_cash">Cash</string>
+    <string name="pay_card">Bank Card</string>
+    <string name="pay_wallet">E-Wallet</string>
+    <string name="pay_transfer">Bank Transfer</string>
+
+    <!-- Debts & Loans -->
+    <string name="debts_title">Debts Record</string>
+    <string name="filter_all">All</string>
+    <string name="filter_owed_to_me">Owed to Me</string>
+    <string name="filter_i_owe">I Owe</string>
+    <string name="add_debt">Add New Debt</string>
+    <string name="edit_debt">Edit Debt</string>
+    <string name="delete_debt">Delete Debt</string>
+    <string name="debt_type">Debt Type</string>
+    <string name="person_name">Person Name</string>
+    <string name="person_name_hint">e.g. Ahmed Mustafa</string>
+    <string name="total_amount">Total Amount</string>
+    <string name="lent_date">Lending / Borrowing Date</string>
+    <string name="due_date">Due Date</string>
+    <string name="no_due_date">No due date</string>
+    <string name="due_in_days">Due in %1$d days</string>
+    <string name="overdue_days">Overdue %1$d days</string>
+    <string name="due_today">Due today</string>
+    <string name="repaid_of">Repaid %1$s of %2$s</string>
+    <string name="remaining">Remaining: %1$s</string>
+    <string name="status_unpaid">Unpaid</string>
+    <string name="status_partially_paid">Partially Paid</string>
+    <string name="status_fully_paid">Fully Paid</string>
+    <string name="log_repayment">Record Repayment</string>
+    <string name="repayment_history">Repayment History</string>
+    <string name="no_payments_yet">No payments recorded yet</string>
+    <string name="repayment_amount">Repayment Amount</string>
+    <string name="enable_due_reminder">Reminder 1 day before due date</string>
+    <string name="no_debts_yet">No debts recorded</string>
+
+    <!-- PDF & Reports -->
+    <string name="reports_title">Reports &amp; Export PDF</string>
+    <string name="report_comprehensive_title">Comprehensive Report</string>
+    <string name="report_expense_title">Transactions Report</string>
+    <string name="report_debts_title">Debts &amp; Obligations</string>
+    <string name="export_pdf">Export PDF to Downloads</string>
+    <string name="share_pdf">Share Report</string>
+    <string name="select_period">Time Period</string>
+    <string name="period_all">All Time</string>
+    <string name="period_this_month">This Month</string>
+    <string name="period_last_month">Last Month</string>
+    <string name="pdf_exported_success">Report file saved successfully to Downloads</string>
+    <string name="pdf_export_failed">Failed to export PDF, please try again</string>
+    <string name="generating_pdf">Generating report...</string>
+    <string name="report_summary">Summary</string>
+    <string name="monthly_average">Monthly Average</string>
+    <string name="highest_category">Highest Spending</string>
+    <string name="lowest_category">Lowest Spending</string>
+    <string name="items_count">Number of Items</string>
+    <string name="issue_date">Issue Date</string>
+
+    <!-- Settings -->
+    <string name="settings_title">Settings</string>
+    <string name="language">Language</string>
+    <string name="theme">Appearance</string>
+    <string name="theme_light">Light</string>
+    <string name="theme_dark">Dark</string>
+    <string name="theme_system">System</string>
+    <string name="currency">Default Currency</string>
+    <string name="currency_egp">Egyptian Pound</string>
+    <string name="currency_sar">Saudi Riyal</string>
+    <string name="currency_usd">US Dollar</string>
+    <string name="currency_eur">Euro</string>
+    <string name="currency_symbol_egp">EGP</string>
+    <string name="notifications">Notifications &amp; Reminders</string>
+    <string name="about_app">About Nabih Wallet</string>
+    <string name="app_version">Version 1.0.0</string>
+    <string name="clear_data">Reset Data</string>
+
+    <!-- Categories Customization -->
+    <string name="categories_management">Categories Management</string>
+    <string name="categories_management_desc">Customize icons and names for expenses &amp; income</string>
+    <string name="choose_icon">Choose Icon</string>
+    <string name="icon_library">Icon Library</string>
+    <string name="change_icon">Change Icon</string>
+    <string name="reset_icons">Reset Default Icons</string>
+    <string name="custom_category">Custom Category</string>
+    <string name="add_custom_category">Add New Category</string>
+    <string name="category_name">Category Name</string>
+    <string name="category_type">Category Type</string>
+    <string name="select_icon">Select from Icon Library</string>
+    <string name="search_icons">Search icons...</string>
+    <string name="all_icons">All</string>
+    <string name="filter_expenses">Expenses</string>
+    <string name="filter_income">Income</string>
+    <string name="icon_changed_success">Category icon updated successfully</string>
+    <string name="lang_arabic">العربية</string>
+    <string name="lang_english">English</string>
+    <string name="lang_desc_ar">Arabic interface with RTL layout</string>
+    <string name="lang_desc_en">English interface with LTR layout</string>
+
+    <!-- Validation -->
+    <string name="error_invalid_amount">Please enter a valid amount greater than zero</string>
+    <string name="error_empty_name">Please enter a name</string>
+    <string name="error_empty_category">Please select a category</string>
+    <string name="error_repayment_exceeds">Repayment cannot exceed the remaining amount</string>
+</resources>

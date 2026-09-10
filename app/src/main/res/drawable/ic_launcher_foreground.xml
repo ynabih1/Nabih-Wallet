@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- Geometric Custom Uppercase Letter N in Burnt Orange / Terracotta -->
+    <path
+        android:fillColor="#D97757"
+        android:pathData="M 32,33 C 32,30.2 34.2,28 37,28 L 41,28 C 43.1,28 44.8,29.1 46.1,30.9 L 63.8,57.2 L 63.8,33 C 63.8,30.2 66,28 68.8,28 L 71,28 C 73.8,28 76,30.2 76,33 L 76,75 C 76,77.8 73.8,80 71,80 L 67,80 C 64.9,80 63.2,78.9 61.9,77.1 L 44.2,50.8 L 44.2,75 C 44.2,77.8 42,80 39.2,80 L 37,80 C 34.2,80 32,77.8 32,75 Z" />
+</vector>
