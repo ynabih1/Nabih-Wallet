@@ -193,7 +193,7 @@ fun DebtDialog(
                         errorMessage = null
                     },
                     label = { Text(if (isArabic) "اسم الشخص" else "Person Name") },
-                    placeholder = { Text(if (isArabic) "مثال: أحمد، محمد..." else "e.g. John, Alex...") },
+                    placeholder = { Text(if (isArabic) "أحمد، محمد..." else "John, Alex...") },
                     singleLine = true,
                     isError = errorMessage != null && personName.isBlank(),
                     modifier = Modifier
@@ -249,7 +249,7 @@ fun DebtDialog(
                             Spacer(modifier = Modifier.width(10.dp))
                             Column {
                                 Text(
-                                    text = if (isArabic) "تاريخ الاستحقاق (اختياري)" else "Due Date (Optional)",
+                                    text = if (isArabic) "تاريخ الاستحقاق" else "Due Date",
                                     style = MaterialTheme.typography.labelMedium,
                                     color = TextSecondaryBrown
                                 )

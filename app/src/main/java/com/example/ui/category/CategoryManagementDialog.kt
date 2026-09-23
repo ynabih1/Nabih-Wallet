@@ -63,7 +63,6 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import com.example.model.CategoryItem
 import com.example.model.FinancialConstants
-import com.example.model.IconLibrary
 import com.example.ui.theme.BorderSubtle
 import com.example.ui.theme.BurntOrangeLight
 import com.example.ui.theme.BurntOrangePrimary
@@ -79,21 +78,19 @@ import com.example.ui.theme.WarmCardSurface
 fun CategoryManagementDialog(
     expenseCategories: List<CategoryItem>,
     incomeCategories: List<CategoryItem>,
-    customIconOverrides: Map<String, String>,
+    customIconOverrides: Map<String, String> = emptyMap(),
     isArabic: Boolean,
     onDismiss: () -> Unit,
-    onUpdateIcon: (categoryNameOrId: String, iconKey: String) -> Unit,
+    onUpdateIcon: ((categoryNameOrId: String, iconKey: String) -> Unit)? = null,
     onAddCustomCategory: (nameAr: String, nameEn: String, type: String, iconKey: String) -> Unit,
     onDeleteCustomCategory: ((categoryId: String) -> Unit)? = null,
-    onResetDefaults: () -> Unit
+    onResetDefaults: (() -> Unit)? = null
 ) {
     var selectedTab by remember { mutableStateOf("EXPENSE") } // "EXPENSE" or "INCOME"
     var searchQuery by remember { mutableStateOf("") }
 
     // Sub-dialog states
-    var categoryForIconPicker by remember { mutableStateOf<CategoryItem?>(null) }
     var showAddCategoryDialog by remember { mutableStateOf(false) }
-    var showResetConfirmDialog by remember { mutableStateOf(false) }
     var categoryToDelete by remember { mutableStateOf<CategoryItem?>(null) }
 
     Dialog(
@@ -123,13 +120,13 @@ fun CategoryManagementDialog(
                 ) {
                     Column(modifier = Modifier.weight(1f)) {
                         Text(
-                            text = if (isArabic) "إدارة وتخصيص الفئات" else "Categories & Customization",
+                            text = if (isArabic) "إدارة وتخصيص الفئات" else "Category Management",
                             style = MaterialTheme.typography.titleLarge,
                             fontWeight = FontWeight.Bold,
                             color = TextPrimaryDark
                         )
                         Text(
-                            text = if (isArabic) "تخصيص الفئات، الأيقونات، والألوان لجميع المعاملات" else "Customize categories, icons, and colors for all transactions",
+                            text = if (isArabic) "إضافة وإدارة فئات المصروفات والإيرادات" else "Manage expense and income categories",
                             style = MaterialTheme.typography.bodySmall,
                             color = TextSecondaryBrown
                         )
@@ -181,7 +178,7 @@ fun CategoryManagementDialog(
                             )
                             Spacer(modifier = Modifier.width(6.dp))
                             Text(
-                                text = if (isArabic) "المصروفات (${expenseCategories.size})" else "Expenses (${expenseCategories.size})",
+                                text = if (isArabic) "المصروفات" else "Expenses",
                                 style = MaterialTheme.typography.titleSmall,
                                 fontWeight = FontWeight.Bold,
                                 color = if (isExpense) Color.White else TextPrimaryDark
@@ -211,7 +208,7 @@ fun CategoryManagementDialog(
                             )
                             Spacer(modifier = Modifier.width(6.dp))
                             Text(
-                                text = if (isArabic) "الإيرادات (${incomeCategories.size})" else "Income (${incomeCategories.size})",
+                                text = if (isArabic) "الإيرادات" else "Income",
                                 style = MaterialTheme.typography.titleSmall,
                                 fontWeight = FontWeight.Bold,
                                 color = if (isIncome) Color.White else TextPrimaryDark
@@ -260,10 +257,10 @@ fun CategoryManagementDialog(
 
                 Spacer(modifier = Modifier.height(10.dp))
 
-                // 4. Quick Action Buttons: Add Category + Reset Defaults
+                // 4. Quick Action Button: Add Category
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
+                    horizontalArrangement = Arrangement.Start,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Button(
@@ -286,26 +283,6 @@ fun CategoryManagementDialog(
                             color = Color.White
                         )
                     }
-
-                    if (customIconOverrides.isNotEmpty()) {
-                        TextButton(
-                            onClick = { showResetConfirmDialog = true },
-                            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 6.dp)
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Refresh,
-                                contentDescription = null,
-                                tint = TextSecondaryBrown,
-                                modifier = Modifier.size(16.dp)
-                            )
-                            Spacer(modifier = Modifier.width(4.dp))
-                            Text(
-                                text = if (isArabic) "استعادة الافتراضي" else "Reset Defaults",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = TextSecondaryBrown
-                            )
-                        }
-                    }
                 }
 
                 Spacer(modifier = Modifier.height(10.dp))
@@ -323,17 +300,41 @@ fun CategoryManagementDialog(
                     }
                 }
 
-                LazyColumn(
-                    modifier = Modifier
-                        .weight(1f)
-                        .fillMaxWidth(),
-                    verticalArrangement = Arrangement.spacedBy(10.dp)
-                ) {
-                    items(filteredCategories, key = { it.id }) { category ->
-                        val activeIcon = FinancialConstants.getCategoryIcon(category.nameAr, customIconOverrides)
+                if (filteredCategories.isEmpty()) {
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .fillMaxWidth(),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Column(
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.Center,
+                            modifier = Modifier.padding(24.dp)
+                        ) {
+                            Text(
+                                text = if (isArabic) "لا توجد فئات حالياً" else "No categories found",
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold,
+                                color = TextPrimaryDark
+                            )
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Text(
+                                text = if (isArabic) "انقر على \"إضافة فئة جديدة\" لإنشاء فئاتك الخاصة" else "Click \"Add New Category\" to create your own",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = TextSecondaryBrown
+                            )
+                        }
+                    }
+                } else {
+                    LazyColumn(
+                        modifier = Modifier
+                            .weight(1f)
+                            .fillMaxWidth(),
+                        verticalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        items(filteredCategories, key = { it.id }) { category ->
                         val categoryName = if (isArabic) category.nameAr else category.nameEn
-                        val customKey = customIconOverrides[category.nameAr] ?: customIconOverrides[category.id]
-                        val isCustomized = customKey != null
                         val isCustomCreated = category.id.startsWith("custom_")
                         val catColor = Color(category.color)
 
@@ -341,13 +342,12 @@ fun CategoryManagementDialog(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .clip(RoundedCornerShape(16.dp))
-                                .clickable { categoryForIconPicker = category }
                                 .testTag("manage_cat_${category.id}"),
                             shape = RoundedCornerShape(16.dp),
                             color = WarmCardSurface,
                             border = androidx.compose.foundation.BorderStroke(
-                                width = if (isCustomized || isCustomCreated) 1.5.dp else 1.dp,
-                                color = if (isCustomized || isCustomCreated) BurntOrangePrimary.copy(alpha = 0.5f) else BorderSubtle
+                                width = if (isCustomCreated) 1.5.dp else 1.dp,
+                                color = if (isCustomCreated) BurntOrangePrimary.copy(alpha = 0.5f) else BorderSubtle
                             )
                         ) {
                             Row(
@@ -356,24 +356,6 @@ fun CategoryManagementDialog(
                                     .padding(horizontal = 14.dp, vertical = 12.dp),
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
-                                // Category Icon with Colored Container
-                                Box(
-                                    modifier = Modifier
-                                        .size(46.dp)
-                                        .clip(CircleShape)
-                                        .background(catColor.copy(alpha = 0.15f)),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    Icon(
-                                        imageVector = activeIcon,
-                                        contentDescription = null,
-                                        tint = catColor,
-                                        modifier = Modifier.size(24.dp)
-                                    )
-                                }
-
-                                Spacer(modifier = Modifier.width(14.dp))
-
                                 Column(modifier = Modifier.weight(1f)) {
                                     Row(verticalAlignment = Alignment.CenterVertically) {
                                         Text(
@@ -410,19 +392,6 @@ fun CategoryManagementDialog(
 
                                 Spacer(modifier = Modifier.width(6.dp))
 
-                                // Edit icon button
-                                IconButton(
-                                    onClick = { categoryForIconPicker = category },
-                                    modifier = Modifier.size(34.dp)
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Default.Palette,
-                                        contentDescription = "تخصيص الأيقونة",
-                                        tint = BurntOrangePrimary,
-                                        modifier = Modifier.size(18.dp)
-                                    )
-                                }
-
                                 // Delete custom category button (if custom created)
                                 if (isCustomCreated && onDeleteCustomCategory != null) {
                                     IconButton(
@@ -441,6 +410,7 @@ fun CategoryManagementDialog(
                         }
                     }
                 }
+            }
 
                 Spacer(modifier = Modifier.height(14.dp))
 
@@ -463,32 +433,14 @@ fun CategoryManagementDialog(
         }
     }
 
-    // Sub Dialog: Icon Picker
-    categoryForIconPicker?.let { category ->
-        val currentKey = customIconOverrides[category.nameAr]
-            ?: customIconOverrides[category.id]
-            ?: category.iconKey.ifBlank { IconLibrary.findKeyByIcon(category.icon) }
-
-        IconPickerDialog(
-            targetCategoryName = if (isArabic) category.nameAr else category.nameEn,
-            initialIconKey = currentKey,
-            isArabic = isArabic,
-            onDismiss = { categoryForIconPicker = null },
-            onIconSelected = { newIconKey ->
-                onUpdateIcon(category.nameAr, newIconKey)
-                categoryForIconPicker = null
-            }
-        )
-    }
-
     // Sub Dialog: Add Custom Category
     if (showAddCategoryDialog) {
         AddCategoryDialog(
             initialType = selectedTab,
             isArabic = isArabic,
             onDismiss = { showAddCategoryDialog = false },
-            onAdd = { nameAr, nameEn, type, iconKey ->
-                onAddCustomCategory(nameAr, nameEn, type, iconKey)
+            onAdd = { nameAr, nameEn, type ->
+                onAddCustomCategory(nameAr, nameEn, type, "tag")
                 showAddCategoryDialog = false
             }
         )
@@ -528,41 +480,6 @@ fun CategoryManagementDialog(
             }
         )
     }
-
-    // Sub Dialog: Confirm Reset
-    if (showResetConfirmDialog) {
-        AlertDialog(
-            onDismissRequest = { showResetConfirmDialog = false },
-            title = {
-                Text(
-                    text = if (isArabic) "استعادة الأيقونات الافتراضية؟" else "Reset default icons?",
-                    fontWeight = FontWeight.Bold
-                )
-            },
-            text = {
-                Text(
-                    text = if (isArabic) "سيتم إعادة تعيين جميع أيقونات الفئات إلى الأيقونات الأصلية الافتراضية."
-                    else "All category icons will be reset to their default icons."
-                )
-            },
-            confirmButton = {
-                Button(
-                    onClick = {
-                        onResetDefaults()
-                        showResetConfirmDialog = false
-                    },
-                    colors = ButtonDefaults.buttonColors(containerColor = BurntOrangePrimary)
-                ) {
-                    Text(text = if (isArabic) "نعم، استعادة" else "Reset", color = Color.White)
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { showResetConfirmDialog = false }) {
-                    Text(text = if (isArabic) "إلغاء" else "Cancel")
-                }
-            }
-        )
-    }
 }
 
 @Composable
@@ -570,14 +487,11 @@ fun AddCategoryDialog(
     initialType: String,
     isArabic: Boolean,
     onDismiss: () -> Unit,
-    onAdd: (nameAr: String, nameEn: String, type: String, iconKey: String) -> Unit
+    onAdd: (nameAr: String, nameEn: String, type: String) -> Unit
 ) {
     var nameAr by remember { mutableStateOf("") }
-    var nameEn by remember { mutableStateOf("") }
     var type by remember { mutableStateOf(initialType) }
-    var chosenIconKey by remember { mutableStateOf("tag") }
     var selectedColorHex by remember { mutableLongStateOf(0xFF1E293B) }
-    var showIconPicker by remember { mutableStateOf(false) }
 
     val presetColors = listOf(
         0xFFC25E40, // Warm Terracotta
@@ -618,19 +532,8 @@ fun AddCategoryDialog(
                 OutlinedTextField(
                     value = nameAr,
                     onValueChange = { nameAr = it },
-                    label = { Text(if (isArabic) "اسم الفئة (بالعربية)" else "Category Name (Arabic)") },
-                    modifier = Modifier.fillMaxWidth(),
-                    singleLine = true,
-                    shape = RoundedCornerShape(12.dp)
-                )
-
-                Spacer(modifier = Modifier.height(10.dp))
-
-                // English Name (Optional)
-                OutlinedTextField(
-                    value = nameEn,
-                    onValueChange = { nameEn = it },
-                    label = { Text(if (isArabic) "الاسم بالإنجليزية (اختياري)" else "English Name (Optional)") },
+                    label = { Text(if (isArabic) "اسم الفئة" else "Category Name") },
+                    placeholder = { Text(if (isArabic) "مثال: هدايا، كتب، صيانة..." else "e.g., Gifts, Books, Repairs...") },
                     modifier = Modifier.fillMaxWidth(),
                     singleLine = true,
                     shape = RoundedCornerShape(12.dp)
@@ -656,7 +559,7 @@ fun AddCategoryDialog(
                     FilterChip(
                         selected = type == "INCOME",
                         onClick = { type = "INCOME" },
-                        label = { Text(if (isArabic) "دخل / إيرادات" else "Income") },
+                        label = { Text(if (isArabic) "دخل" else "Income") },
                         modifier = Modifier.weight(1f)
                     )
                 }
@@ -702,63 +605,6 @@ fun AddCategoryDialog(
                     }
                 }
 
-                Spacer(modifier = Modifier.height(14.dp))
-
-                // Icon Selection Button & Preview
-                Text(
-                    text = if (isArabic) "الأيقونة المحددة:" else "Selected Icon:",
-                    style = MaterialTheme.typography.titleSmall,
-                    fontWeight = FontWeight.SemiBold,
-                    color = TextPrimaryDark
-                )
-                Spacer(modifier = Modifier.height(6.dp))
-                Surface(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(12.dp))
-                        .clickable { showIconPicker = true },
-                    color = WarmCardSurface,
-                    border = androidx.compose.foundation.BorderStroke(1.dp, BorderSubtle),
-                    shape = RoundedCornerShape(12.dp)
-                ) {
-                    Row(
-                        modifier = Modifier.padding(12.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Box(
-                                modifier = Modifier
-                                    .size(38.dp)
-                                    .clip(CircleShape)
-                                    .background(Color(selectedColorHex)),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Icon(
-                                    imageVector = IconLibrary.getIconByKey(chosenIconKey),
-                                    contentDescription = null,
-                                    tint = Color.White,
-                                    modifier = Modifier.size(20.dp)
-                                )
-                            }
-                            Spacer(modifier = Modifier.width(10.dp))
-                            val item = IconLibrary.getIconItemByKey(chosenIconKey)
-                            Text(
-                                text = if (isArabic) (item?.nameAr ?: chosenIconKey) else (item?.nameEn ?: chosenIconKey),
-                                style = MaterialTheme.typography.bodyMedium,
-                                fontWeight = FontWeight.Bold,
-                                color = TextPrimaryDark
-                            )
-                        }
-                        Text(
-                            text = if (isArabic) "تغيير من المكتبة..." else "Pick from library...",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = BurntOrangePrimary,
-                            fontWeight = FontWeight.SemiBold
-                        )
-                    }
-                }
-
                 Spacer(modifier = Modifier.height(20.dp))
 
                 // Actions
@@ -775,9 +621,8 @@ fun AddCategoryDialog(
                     Button(
                         onClick = {
                             val finalAr = nameAr.trim()
-                            val finalEn = nameEn.trim().ifBlank { finalAr }
                             if (finalAr.isNotBlank()) {
-                                onAdd(finalAr, finalEn, type, chosenIconKey)
+                                onAdd(finalAr, finalAr, type)
                             }
                         },
                         enabled = nameAr.isNotBlank(),
@@ -789,18 +634,5 @@ fun AddCategoryDialog(
                 }
             }
         }
-    }
-
-    if (showIconPicker) {
-        IconPickerDialog(
-            targetCategoryName = nameAr.ifBlank { if (isArabic) "فئة جديدة" else "New Category" },
-            initialIconKey = chosenIconKey,
-            isArabic = isArabic,
-            onDismiss = { showIconPicker = false },
-            onIconSelected = { key ->
-                chosenIconKey = key
-                showIconPicker = false
-            }
-        )
     }
 }

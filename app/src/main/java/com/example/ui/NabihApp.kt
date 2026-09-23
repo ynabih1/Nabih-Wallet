@@ -104,6 +104,7 @@ fun NabihApp(
     val snackbarHostState = remember { SnackbarHostState() }
     val language by viewModel.language.collectAsStateWithLifecycle()
     val allTransactions by viewModel.allTransactions.collectAsStateWithLifecycle()
+    val paymentMethods by viewModel.allPaymentMethods.collectAsStateWithLifecycle()
     val currencySymbol = viewModel.getCurrencySymbol()
     val isArabic = language == "ar"
 
@@ -379,13 +380,19 @@ fun NabihApp(
                 existingTransactions = allTransactions,
                 customExpenseCategories = viewModel.getAllExpenseCategories(),
                 customIncomeCategories = viewModel.getAllIncomeCategories(),
+                savedPaymentMethods = paymentMethods.map { it.name },
+                onDeletePaymentMethod = { methodName ->
+                    paymentMethods.firstOrNull { it.name == methodName }?.let {
+                        viewModel.deletePaymentMethod(it)
+                    }
+                },
                 isArabic = isArabic,
                 currencySymbol = currencySymbol,
                 onDismiss = {
                     showTransactionDialog = false
                     transactionToEdit = null
                 },
-                onSave = { id, type, amount, category, paymentMethod, dateMillis, notes, isPinned, receiptUri, receiptMimeType ->
+                onSave = { id, type, amount, category, paymentMethod, dateMillis, endDateMillis, notes, isPinned, receiptUri, receiptMimeType ->
                     viewModel.saveTransaction(
                         id = id,
                         type = type,
@@ -393,6 +400,7 @@ fun NabihApp(
                         category = category,
                         paymentMethod = paymentMethod,
                         dateMillis = dateMillis,
+                        endDateMillis = endDateMillis,
                         notes = notes,
                         isPinned = isPinned,
                         receiptUri = receiptUri,

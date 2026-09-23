@@ -7,6 +7,7 @@ import androidx.lifecycle.viewModelScope
 import com.example.data.local.database.AppDatabase
 import com.example.data.local.entity.DebtEntity
 import com.example.data.local.entity.DebtPaymentEntity
+import com.example.data.local.entity.PaymentMethodEntity
 import com.example.data.local.entity.TransactionEntity
 import com.example.data.repository.WalletRepository
 import com.example.model.CategoryItem
@@ -20,8 +21,12 @@ import com.example.notification.NotificationHelper
 import com.example.data.export.ExportUtils
 import com.example.data.export.toDebtRecord
 import com.example.pdf.PdfExporter
-import com.example.pdf.PdfReportGenerator
 import com.example.ui.components.Formatters
+import android.net.Uri
+import com.example.data.backup.BackupManager
+import com.example.data.backup.BackupPackage
+import com.example.ui.components.DateFilterPreset
+import com.example.ui.components.DateFilterUtils
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -52,11 +57,14 @@ class WalletViewModel(application: Application) : AndroidViewModel(application) 
     private val repository: WalletRepository
     private val prefs = application.getSharedPreferences("nabih_wallet_prefs", Context.MODE_PRIVATE)
 
-    private val _currency = MutableStateFlow("")
-    val currency: StateFlow<String> = _currency.asStateFlow()
-
     private val _language = MutableStateFlow(prefs.getString("language", "ar") ?: "ar")
     val language: StateFlow<String> = _language.asStateFlow()
+
+    private val _currency = MutableStateFlow(
+        prefs.getString("currency_code", null)?.takeIf { it.isNotBlank() }
+            ?: if ((prefs.getString("language", "ar") ?: "ar") == "ar") "ج.م" else "EGP"
+    )
+    val currency: StateFlow<String> = _currency.asStateFlow()
 
     private val _themeMode = MutableStateFlow(prefs.getString("theme_mode", "LIGHT") ?: "LIGHT")
     val themeMode: StateFlow<String> = _themeMode.asStateFlow()
@@ -79,6 +87,12 @@ class WalletViewModel(application: Application) : AndroidViewModel(application) 
     fun setLanguage(lang: String) {
         _language.value = lang
         prefs.edit().putString("language", lang).apply()
+        val saved = prefs.getString("currency_code", null)
+        if (saved == null || saved == "ج.م" || saved == "EGP") {
+            val newDefault = if (lang == "ar") "ج.م" else "EGP"
+            _currency.value = newDefault
+            prefs.edit().putString("currency_code", newDefault).apply()
+        }
     }
 
     fun setThemeMode(mode: String) {
@@ -149,20 +163,117 @@ class WalletViewModel(application: Application) : AndroidViewModel(application) 
     private val _debtFilter = MutableStateFlow(DebtFilter.ALL)
     val debtFilter: StateFlow<DebtFilter> = _debtFilter.asStateFlow()
 
+    // Date Range Filter State
+    private val _filterStartDate = MutableStateFlow<Long>(DateFilterUtils.getDefaultStartDate(emptyList()))
+    val filterStartDate: StateFlow<Long> = _filterStartDate.asStateFlow()
+
+    private val _filterEndDate = MutableStateFlow<Long>(DateFilterUtils.getTodayEndOfDay())
+    val filterEndDate: StateFlow<Long> = _filterEndDate.asStateFlow()
+
+    private val _filterPreset = MutableStateFlow(DateFilterPreset.ALL)
+    val filterPreset: StateFlow<DateFilterPreset> = _filterPreset.asStateFlow()
+
+    // Backup & Restore State
+    private val _lastBackupDate = MutableStateFlow<String?>(prefs.getString("last_backup_date", null))
+    val lastBackupDate: StateFlow<String?> = _lastBackupDate.asStateFlow()
+
+    private val _isBackupReminderEnabled = MutableStateFlow(prefs.getBoolean("backup_reminder_enabled", false))
+    val isBackupReminderEnabled: StateFlow<Boolean> = _isBackupReminderEnabled.asStateFlow()
+
+    private val _backupReminderFrequency = MutableStateFlow(prefs.getString("backup_reminder_freq", "WEEKLY") ?: "WEEKLY")
+    val backupReminderFrequency: StateFlow<String> = _backupReminderFrequency.asStateFlow()
+
+    private val _isBackingUp = MutableStateFlow(false)
+    val isBackingUp: StateFlow<Boolean> = _isBackingUp.asStateFlow()
+
+    private val _isRestoring = MutableStateFlow(false)
+    val isRestoring: StateFlow<Boolean> = _isRestoring.asStateFlow()
+
+    fun setDateFilter(start: Long, end: Long, preset: DateFilterPreset = DateFilterPreset.CUSTOM) {
+        _filterStartDate.value = start
+        _filterEndDate.value = end
+        _filterPreset.value = preset
+    }
+
+    fun applyDatePreset(preset: DateFilterPreset) {
+        val range = DateFilterUtils.calculatePresetRange(preset, allTransactions.value)
+        _filterStartDate.value = range.first
+        _filterEndDate.value = range.second
+        _filterPreset.value = preset
+    }
+
+    fun setBackupReminderEnabled(enabled: Boolean) {
+        _isBackupReminderEnabled.value = enabled
+        prefs.edit().putBoolean("backup_reminder_enabled", enabled).apply()
+        if (enabled) {
+            NotificationHelper.sendBackupReminder(getApplication(), _language.value == "ar")
+        }
+    }
+
+    fun setBackupReminderFrequency(freq: String) {
+        _backupReminderFrequency.value = freq
+        prefs.edit().putString("backup_reminder_freq", freq).apply()
+    }
+
     init {
         val db = AppDatabase.getDatabase(application)
         repository = WalletRepository(
             transactionDao = db.transactionDao(),
             debtDao = db.debtDao(),
-            debtPaymentDao = db.debtPaymentDao()
+            debtPaymentDao = db.debtPaymentDao(),
+            paymentMethodDao = db.paymentMethodDao()
         )
         FinancialConstants.setCustomIconOverrides(_categoryIcons.value)
-        cleanDummyDataIfPresent()
         consolidateDuplicateCategories()
+
+        // Sync default start date when transactions change if preset is ALL
+        viewModelScope.launch {
+            repository.allTransactions.collect { txs ->
+                if (_filterPreset.value == DateFilterPreset.ALL && txs.isNotEmpty()) {
+                    _filterStartDate.value = DateFilterUtils.getDefaultStartDate(txs)
+                }
+            }
+        }
+    }
+
+    val allPaymentMethods: StateFlow<List<PaymentMethodEntity>> = repository.allPaymentMethods
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    fun addPaymentMethod(name: String) {
+        val trimmed = name.trim()
+        if (trimmed.isNotBlank()) {
+            viewModelScope.launch {
+                repository.insertPaymentMethod(trimmed)
+            }
+        }
+    }
+
+    fun deletePaymentMethod(method: PaymentMethodEntity) {
+        viewModelScope.launch {
+            repository.deletePaymentMethod(method)
+            val msg = if (_language.value == "ar") "تم حذف طريقة الدفع" else "Payment method deleted"
+            _feedback.emit(UserFeedback.Success(msg))
+        }
+    }
+
+    fun deletePaymentMethodById(id: Long) {
+        viewModelScope.launch {
+            repository.deletePaymentMethodById(id)
+            val msg = if (_language.value == "ar") "تم حذف طريقة الدفع" else "Payment method deleted"
+            _feedback.emit(UserFeedback.Success(msg))
+        }
     }
 
     val allTransactions: StateFlow<List<TransactionEntity>> = repository.allTransactions
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    val dateFilteredTransactions: StateFlow<List<TransactionEntity>> = combine(
+        allTransactions,
+        filterStartDate,
+        filterEndDate
+    ) { list, start, end ->
+        list.filter { it.dateMillis in start..end }
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     val recentTransactions: StateFlow<List<TransactionEntity>> = repository.recentTransactions
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
@@ -390,8 +501,8 @@ class WalletViewModel(application: Application) : AndroidViewModel(application) 
                                 id = "top_category_insight",
                                 titleAr = "📊 رؤية ذكية: أعلى فئة إنفاق",
                                 titleEn = "📊 Smart Insight: Top Category",
-                                messageAr = "فئة (${topCategoryEntry.key}) تشكل $pct% من إجمالي مصروفاتك لهذا الشهر (${Formatters.formatMoney(topAmount)}).",
-                                messageEn = "Category (${topCategoryEntry.key}) represents $pct% of your expenses this month (${Formatters.formatMoney(topAmount)}).",
+                                messageAr = "فئة ${topCategoryEntry.key} تشكل $pct% من إجمالي مصروفاتك لهذا الشهر بمبلغ ${Formatters.formatMoney(topAmount)}.",
+                                messageEn = "Category ${topCategoryEntry.key} represents $pct% of your expenses this month with amount ${Formatters.formatMoney(topAmount)}.",
                                 severity = NotificationSeverity.INFO,
                                 type = "CATEGORY"
                             )
@@ -438,11 +549,31 @@ class WalletViewModel(application: Application) : AndroidViewModel(application) 
     }
 
     fun setCurrency(newCurrency: String) {
-        _currency.value = ""
+        val trimmed = newCurrency.trim()
+        val finalCurrency = if (trimmed.isBlank()) {
+            if (_language.value == "ar") "ج.م" else "EGP"
+        } else {
+            trimmed
+        }
+        _currency.value = finalCurrency
+        prefs.edit().putString("currency_code", finalCurrency).apply()
+        viewModelScope.launch {
+            val msg = if (_language.value == "ar") "تم حفظ العملة: $finalCurrency" else "Currency saved: $finalCurrency"
+            _feedback.emit(UserFeedback.Success(msg))
+        }
     }
 
     fun getCurrencySymbol(): String {
-        return ""
+        val current = _currency.value.trim()
+        if (current.isNotBlank()) return current
+        val saved = prefs.getString("currency_code", null)?.trim()
+        if (!saved.isNullOrBlank()) {
+            _currency.value = saved
+            return saved
+        }
+        val defaultCurrency = if (_language.value == "ar") "ج.م" else "EGP"
+        _currency.value = defaultCurrency
+        return defaultCurrency
     }
 
     fun saveTransaction(
@@ -452,107 +583,56 @@ class WalletViewModel(application: Application) : AndroidViewModel(application) 
         category: String,
         paymentMethod: String,
         dateMillis: Long,
+        endDateMillis: Long? = null,
         notes: String,
         isPinned: Boolean,
         receiptUri: String?,
         receiptMimeType: String?
     ) {
         viewModelScope.launch {
+            val trimmedMethod = paymentMethod.trim()
+            if (trimmedMethod.isNotBlank()) {
+                repository.insertPaymentMethod(trimmedMethod)
+            }
+
             val normalizedCat = FinancialConstants.normalizeCategoryName(category)
-            val currentCurrency = getCurrencySymbol()
 
             if (id > 0) {
-                // Editing an existing transaction
-                // Check if user changed the category to another existing category item
-                val otherExisting = repository.getTransactionsByTypeSync(type)
-                    .filter { it.id != id && FinancialConstants.normalizeCategoryName(it.category) == normalizedCat }
-
-                if (otherExisting.isNotEmpty()) {
-                    // Merge with the existing item so no duplicate icon is created
-                    val target = otherExisting.first()
-                    val newTotal = target.amount + amount
-                    val mergedNotes = listOf(target.notes, notes)
-                        .filter { it.isNotBlank() }
-                        .distinct()
-                        .joinToString(" • ")
-
-                    val updatedTarget = target.copy(
-                        amount = newTotal,
-                        dateMillis = dateMillis,
-                        paymentMethod = paymentMethod.ifBlank { target.paymentMethod },
-                        notes = mergedNotes,
-                        isPinned = isPinned || target.isPinned,
-                        receiptUri = receiptUri ?: target.receiptUri,
-                        receiptMimeType = receiptMimeType ?: target.receiptMimeType
-                    )
-                    repository.updateTransaction(updatedTarget)
-                    repository.deleteTransactionById(id)
-                    for (other in otherExisting.drop(1)) {
-                        repository.deleteTransaction(other)
-                    }
-                    _feedback.emit(UserFeedback.Success("تم دمج المبلغ مع بند \"$normalizedCat\" ليصبح الإجمالي ${Formatters.formatMoney(newTotal)} $currentCurrency"))
-                } else {
-                    val entity = TransactionEntity(
-                        id = id,
-                        type = type,
-                        amount = amount,
-                        category = normalizedCat,
-                        paymentMethod = paymentMethod,
-                        dateMillis = dateMillis,
-                        notes = notes,
-                        isPinned = isPinned,
-                        receiptUri = receiptUri,
-                        receiptMimeType = receiptMimeType
-                    )
-                    repository.updateTransaction(entity)
-                    _feedback.emit(UserFeedback.Success("تم تعديل العملية بنجاح"))
-                }
+                // Editing an existing transaction: update this specific transaction entity
+                val entity = TransactionEntity(
+                    id = id,
+                    type = type,
+                    amount = amount,
+                    category = normalizedCat,
+                    paymentMethod = paymentMethod,
+                    dateMillis = dateMillis,
+                    endDateMillis = endDateMillis,
+                    notes = notes,
+                    isPinned = isPinned,
+                    receiptUri = receiptUri,
+                    receiptMimeType = receiptMimeType
+                )
+                repository.updateTransaction(entity)
+                val msg = if (_language.value == "ar") "تم تعديل العملية بنجاح" else "Transaction updated successfully"
+                _feedback.emit(UserFeedback.Success(msg))
             } else {
-                // Adding a NEW transaction:
-                // If this category already exists, DO NOT create a new icon. Add the number/amount to the current icon!
-                val existingList = repository.getTransactionsByTypeSync(type)
-                    .filter { FinancialConstants.normalizeCategoryName(it.category) == normalizedCat }
-
-                if (existingList.isNotEmpty()) {
-                    val primary = existingList.first()
-                    val totalPreviousAmount = existingList.sumOf { it.amount }
-                    val newTotalAmount = totalPreviousAmount + amount
-
-                    val mergedNotes = (existingList.map { it.notes } + notes)
-                        .filter { it.isNotBlank() }
-                        .distinct()
-                        .joinToString(" • ")
-
-                    val updatedEntity = primary.copy(
-                        amount = newTotalAmount,
-                        dateMillis = dateMillis,
-                        paymentMethod = paymentMethod.ifBlank { primary.paymentMethod },
-                        notes = mergedNotes,
-                        isPinned = isPinned || existingList.any { it.isPinned },
-                        receiptUri = receiptUri ?: primary.receiptUri,
-                        receiptMimeType = receiptMimeType ?: primary.receiptMimeType
-                    )
-                    repository.updateTransaction(updatedEntity)
-                    for (dup in existingList.drop(1)) {
-                        repository.deleteTransaction(dup)
-                    }
-                    _feedback.emit(UserFeedback.Success("تمت إضافة المبلغ إلى بند \"$normalizedCat\" ليصبح الإجمالي ${Formatters.formatMoney(newTotalAmount)} $currentCurrency"))
-                } else {
-                    val entity = TransactionEntity(
-                        id = 0,
-                        type = type,
-                        amount = amount,
-                        category = normalizedCat,
-                        paymentMethod = paymentMethod,
-                        dateMillis = dateMillis,
-                        notes = notes,
-                        isPinned = isPinned,
-                        receiptUri = receiptUri,
-                        receiptMimeType = receiptMimeType
-                    )
-                    repository.insertTransaction(entity)
-                    _feedback.emit(UserFeedback.Success("تم حفظ العملية بنجاح"))
-                }
+                // Adding a NEW transaction: always save as an independent entity with its own date and time
+                val entity = TransactionEntity(
+                    id = 0,
+                    type = type,
+                    amount = amount,
+                    category = normalizedCat,
+                    paymentMethod = paymentMethod,
+                    dateMillis = dateMillis,
+                    endDateMillis = endDateMillis,
+                    notes = notes,
+                    isPinned = isPinned,
+                    receiptUri = receiptUri,
+                    receiptMimeType = receiptMimeType
+                )
+                repository.insertTransaction(entity)
+                val msg = if (_language.value == "ar") "تم حفظ العملية بنجاح" else "Transaction saved successfully"
+                _feedback.emit(UserFeedback.Success(msg))
             }
             if (type == "EXPENSE") {
                 checkAndSendBudgetAlertIfNeeded()
@@ -631,21 +711,47 @@ class WalletViewModel(application: Application) : AndroidViewModel(application) 
         }
     }
 
-    fun exportExpensesPdfToDownloads(context: Context, periodTitle: String) {
+    fun exportExpensesPdfToDownloads(
+        context: Context,
+        periodTitle: String,
+        customTransactions: List<TransactionEntity>? = null,
+        startDateStr: String = "",
+        endDateStr: String = ""
+    ) {
         viewModelScope.launch {
             _isGeneratingPdf.value = true
             try {
-                val transactions = allTransactions.value
+                if (_filterStartDate.value > _filterEndDate.value) {
+                    _feedback.emit(UserFeedback.Error(if (_language.value == "ar") "تنبيه: تاريخ البداية لا يمكن أن يكون بعد تاريخ النهاية" else "Start date cannot be after end date"))
+                    return@launch
+                }
+                val transactions = customTransactions ?: dateFilteredTransactions.value
+                if (transactions.isEmpty()) {
+                    _feedback.emit(UserFeedback.Error(if (_language.value == "ar") "لا توجد معاملات في نطاق التاريخ المحدد للتصدير" else "No transactions in the selected date range"))
+                    return@launch
+                }
                 val currencySymbol = getCurrencySymbol()
                 val result = ExportUtils.exportPdfReport(
                     context = context,
                     transactions = transactions,
                     currencySymbol = currencySymbol,
                     periodName = periodTitle,
+                    startDateStr = startDateStr,
+                    endDateStr = endDateStr,
                     share = false
                 )
-                if (result != null) {
-                    _feedback.emit(UserFeedback.Success("تم حفظ التقرير في مجلد التنزيلات بنجاح"))
+                when (result) {
+                    is PdfExporter.SaveResult.Success -> {
+                        val msg = if (_language.value == "ar") {
+                            "تم حفظ التقرير في مجلد التنزيلات بنجاح: ${result.fileName}"
+                        } else {
+                            "Report saved to Downloads: ${result.fileName}"
+                        }
+                        _feedback.emit(UserFeedback.Success(msg))
+                    }
+                    is PdfExporter.SaveResult.Failure -> {
+                        _feedback.emit(UserFeedback.Error(result.errorMessage))
+                    }
                 }
             } catch (e: Exception) {
                 _feedback.emit(UserFeedback.Error(e.localizedMessage ?: "حدث خطأ أثناء تصدير التقرير"))
@@ -655,23 +761,131 @@ class WalletViewModel(application: Application) : AndroidViewModel(application) 
         }
     }
 
-    fun shareExpensesPdf(context: Context, periodTitle: String) {
+    fun shareExpensesPdf(
+        context: Context,
+        periodTitle: String,
+        customTransactions: List<TransactionEntity>? = null,
+        startDateStr: String = "",
+        endDateStr: String = ""
+    ) {
         viewModelScope.launch {
             _isGeneratingPdf.value = true
             try {
-                val transactions = allTransactions.value
+                if (_filterStartDate.value > _filterEndDate.value) {
+                    _feedback.emit(UserFeedback.Error(if (_language.value == "ar") "تنبيه: تاريخ البداية لا يمكن أن يكون بعد تاريخ النهاية" else "Start date cannot be after end date"))
+                    return@launch
+                }
+                val transactions = customTransactions ?: dateFilteredTransactions.value
+                if (transactions.isEmpty()) {
+                    _feedback.emit(UserFeedback.Error(if (_language.value == "ar") "لا توجد معاملات في نطاق التاريخ المحدد للتصدير" else "No transactions in the selected date range"))
+                    return@launch
+                }
                 val currencySymbol = getCurrencySymbol()
-                ExportUtils.exportPdfReport(
+                val result = ExportUtils.exportPdfReport(
                     context = context,
                     transactions = transactions,
                     currencySymbol = currencySymbol,
                     periodName = periodTitle,
+                    startDateStr = startDateStr,
+                    endDateStr = endDateStr,
                     share = true
                 )
+                if (result is PdfExporter.SaveResult.Failure) {
+                    _feedback.emit(UserFeedback.Error(result.errorMessage))
+                }
             } catch (e: Exception) {
                 _feedback.emit(UserFeedback.Error(e.localizedMessage ?: "فشل في مشاركة التقرير"))
             } finally {
                 _isGeneratingPdf.value = false
+            }
+        }
+    }
+
+    fun exportBackup(context: Context) {
+        viewModelScope.launch {
+            _isBackingUp.value = true
+            try {
+                val transactions = repository.getAllTransactionsSync()
+                val debts = repository.getAllDebtsSync()
+                val payments = repository.getAllDebtPaymentsSync()
+                val customCats = _customCategories.value
+                val catIcons = _categoryIcons.value
+                val budget = _monthlyBudget.value
+
+                val result = BackupManager.exportBackup(
+                    context = context,
+                    transactions = transactions,
+                    debts = debts,
+                    debtPayments = payments,
+                    customCategories = customCats,
+                    categoryIcons = catIcons,
+                    monthlyBudget = budget
+                )
+
+                result.fold(
+                    onSuccess = { fileName ->
+                        val dateFormatted = DateFilterUtils.formatDateArabic(System.currentTimeMillis())
+                        _lastBackupDate.value = dateFormatted
+                        prefs.edit().putString("last_backup_date", dateFormatted).apply()
+                        val msg = if (_language.value == "ar") {
+                            "تم تصدير النسخة الاحتياطية بنجاح إلى مجلد Downloads:\n$fileName"
+                        } else {
+                            "Backup successfully saved to Downloads:\n$fileName"
+                        }
+                        _feedback.emit(UserFeedback.Success(msg))
+                    },
+                    onFailure = { error ->
+                        val msg = error.localizedMessage ?: "حدث خطأ أثناء تصدير النسخة الاحتياطية"
+                        _feedback.emit(UserFeedback.Error(msg))
+                    }
+                )
+            } catch (e: Exception) {
+                _feedback.emit(UserFeedback.Error(e.localizedMessage ?: "فشل تصدير النسخة الاحتياطية"))
+            } finally {
+                _isBackingUp.value = false
+            }
+        }
+    }
+
+    fun validateBackupFile(context: Context, uri: Uri): Result<BackupPackage> {
+        return BackupManager.parseAndValidateBackup(context, uri)
+    }
+
+    fun restoreBackup(context: Context, backupPackage: BackupPackage) {
+        viewModelScope.launch {
+            _isRestoring.value = true
+            try {
+                repository.restoreAllData(
+                    transactions = backupPackage.transactions,
+                    debts = backupPackage.debts,
+                    payments = backupPackage.debtPayments
+                )
+
+                // Restore custom categories
+                _customCategories.value = backupPackage.customCategories
+                saveCustomCategories(backupPackage.customCategories)
+
+                // Restore category icons
+                _categoryIcons.value = backupPackage.categoryIcons
+                saveCategoryIcons(backupPackage.categoryIcons)
+                FinancialConstants.setCustomIconOverrides(backupPackage.categoryIcons)
+
+                // Restore monthly budget
+                if (backupPackage.monthlyBudget >= 0.0) {
+                    _monthlyBudget.value = backupPackage.monthlyBudget
+                    prefs.edit().putFloat("monthly_budget_amount", backupPackage.monthlyBudget.toFloat()).apply()
+                }
+
+                val msg = if (_language.value == "ar") {
+                    "تمت استعادة البيانات بنجاح: ${backupPackage.transactions.size} معاملة، ${backupPackage.debts.size} ديون"
+                } else {
+                    "Data restored successfully: ${backupPackage.transactions.size} transactions, ${backupPackage.debts.size} debts"
+                }
+                _feedback.emit(UserFeedback.Success(msg))
+            } catch (e: Exception) {
+                _feedback.emit(UserFeedback.Error("فشلت استعادة البيانات: ${e.localizedMessage}"))
+            } finally {
+                _isRestoring.value = false
             }
         }
     }
@@ -684,10 +898,21 @@ class WalletViewModel(application: Application) : AndroidViewModel(application) 
                 val result = ExportUtils.exportDebtsPdfReport(
                     context = context,
                     debts = debts,
+                    currencySymbol = getCurrencySymbol(),
                     share = false
                 )
-                if (result != null) {
-                    _feedback.emit(UserFeedback.Success("تم حفظ تقرير الديون في مجلد التنزيلات بنجاح"))
+                when (result) {
+                    is PdfExporter.SaveResult.Success -> {
+                        val msg = if (_language.value == "ar") {
+                            "تم حفظ تقرير الديون في مجلد التنزيلات بنجاح: ${result.fileName}"
+                        } else {
+                            "Debts report saved to Downloads: ${result.fileName}"
+                        }
+                        _feedback.emit(UserFeedback.Success(msg))
+                    }
+                    is PdfExporter.SaveResult.Failure -> {
+                        _feedback.emit(UserFeedback.Error(result.errorMessage))
+                    }
                 }
             } catch (e: Exception) {
                 _feedback.emit(UserFeedback.Error(e.localizedMessage ?: "حدث خطأ أثناء تصدير تقرير الديون"))
@@ -702,11 +927,15 @@ class WalletViewModel(application: Application) : AndroidViewModel(application) 
             _isGeneratingPdf.value = true
             try {
                 val debts = allDebtsWithPayments.value.map { it.toDebtRecord() }
-                ExportUtils.exportDebtsPdfReport(
+                val result = ExportUtils.exportDebtsPdfReport(
                     context = context,
                     debts = debts,
+                    currencySymbol = getCurrencySymbol(),
                     share = true
                 )
+                if (result is PdfExporter.SaveResult.Failure) {
+                    _feedback.emit(UserFeedback.Error(result.errorMessage))
+                }
             } catch (e: Exception) {
                 _feedback.emit(UserFeedback.Error(e.localizedMessage ?: "فشل في مشاركة التقرير"))
             } finally {
@@ -718,7 +947,15 @@ class WalletViewModel(application: Application) : AndroidViewModel(application) 
     fun clearAllData() {
         viewModelScope.launch {
             repository.clearAllData()
-            _feedback.emit(UserFeedback.Success("تم مسح كافة البيانات بنجاح"))
+            _customCategories.value = emptyList()
+            _categoryIcons.value = emptyMap()
+            prefs.edit()
+                .remove("custom_categories_list")
+                .remove("custom_category_icons")
+                .apply()
+            FinancialConstants.setCustomIconOverrides(emptyMap())
+            val msg = if (_language.value == "ar") "تم مسح وتصفير كافة البيانات بنجاح" else "All data reset successfully"
+            _feedback.emit(UserFeedback.Success(msg))
         }
     }
 
@@ -892,16 +1129,6 @@ class WalletViewModel(application: Application) : AndroidViewModel(application) 
             prefs.edit().putString("custom_categories_list", arr.toString()).apply()
         } catch (e: Exception) {
             // ignore
-        }
-    }
-
-    private fun cleanDummyDataIfPresent() {
-        val hasPurgedDummy = prefs.getBoolean("has_purged_dummy_data_v2", false)
-        if (!hasPurgedDummy) {
-            viewModelScope.launch {
-                repository.clearAllData()
-                prefs.edit().putBoolean("has_purged_dummy_data_v2", true).apply()
-            }
         }
     }
 

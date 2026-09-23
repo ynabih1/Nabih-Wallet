@@ -3,10 +3,12 @@ package com.example.pdf
 import android.content.ContentValues
 import android.content.Context
 import android.content.Intent
+import android.media.MediaScannerConnection
 import android.net.Uri
 import android.os.Build
 import android.os.Environment
 import android.provider.MediaStore
+import android.util.Log
 import androidx.core.content.FileProvider
 import java.io.File
 import java.io.FileInputStream
@@ -14,25 +16,33 @@ import java.io.FileOutputStream
 
 object PdfExporter {
 
+    private const val TAG = "PdfExporter"
+
     sealed class SaveResult {
         data class Success(val uri: Uri, val fileName: String, val bytes: Long) : SaveResult()
         data class Failure(val errorMessage: String) : SaveResult()
     }
 
     /**
-     * Saves the PDF file directly to the system Downloads folder using MediaStore API.
-     * Uses IS_PENDING flag and strictly validates bytesCopied > 0 before confirming success.
+     * Saves the PDF file directly to the system Downloads folder.
+     * Uses MediaStore API with IS_PENDING on Android 10+ (Q+), with strict byte verification (> 0),
+     * automatic cleanup of incomplete entries on failure, and comprehensive logging at every step.
      */
     fun saveToDownloads(context: Context, sourceFile: File, targetFileName: String): SaveResult {
+        Log.d(TAG, "Starting saveToDownloads for file: $targetFileName, source: ${sourceFile.absolutePath}")
+
         if (!sourceFile.exists() || sourceFile.length() <= 0) {
-            return SaveResult.Failure("الملف الأصلي غير موجود أو فارغ")
+            val errorMsg = "الملف المؤقت غير موجود أو فارغ: ${sourceFile.length()} بايت"
+            Log.e(TAG, errorMsg)
+            return SaveResult.Failure(errorMsg)
         }
 
         val resolver = context.contentResolver
         var targetUri: Uri? = null
 
-        try {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+        // 1. Primary Strategy: MediaStore API for Android 10+ (Build.VERSION_CODES.Q and above)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            try {
                 val contentValues = ContentValues().apply {
                     put(MediaStore.MediaColumns.DISPLAY_NAME, targetFileName)
                     put(MediaStore.MediaColumns.MIME_TYPE, "application/pdf")
@@ -40,57 +50,135 @@ object PdfExporter {
                     put(MediaStore.MediaColumns.IS_PENDING, 1)
                 }
 
-                val collection = MediaStore.Downloads.getContentUri(MediaStore.VOLUME_EXTERNAL_PRIMARY)
-                targetUri = resolver.insert(collection, contentValues)
-                    ?: return SaveResult.Failure("فشل إنشاء ملف جديد في مجلد التنزيلات")
-
-                var bytesCopied: Long = 0
-                resolver.openOutputStream(targetUri)?.use { outputStream ->
-                    FileInputStream(sourceFile).use { inputStream ->
-                        bytesCopied = inputStream.copyTo(outputStream)
-                    }
-                } ?: return SaveResult.Failure("تعذر فتح مسار الكتابة للملف")
-
-                if (bytesCopied <= 0) {
-                    // Cleanup failed entry
-                    resolver.delete(targetUri, null, null)
-                    return SaveResult.Failure("لم يتم كتابة أي بيانات في الملف - الحجم 0 بايت")
-                }
-
-                // Confirm file is ready
-                contentValues.clear()
-                contentValues.put(MediaStore.MediaColumns.IS_PENDING, 0)
-                resolver.update(targetUri, contentValues, null, null)
-
-                return SaveResult.Success(targetUri, targetFileName, bytesCopied)
-            } else {
-                // Fallback for older Android (pre-Q)
-                @Suppress("DEPRECATION")
-                val downloadsDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
-                if (!downloadsDir.exists()) {
-                    downloadsDir.mkdirs()
-                }
-                val destFile = File(downloadsDir, targetFileName)
-                var bytesCopied: Long = 0
-                FileInputStream(sourceFile).use { input ->
-                    FileOutputStream(destFile).use { output ->
-                        bytesCopied = input.copyTo(output)
+                // Try Downloads volume first, fallback to external Files table if unsupported by OEM
+                val collectionUri = try {
+                    MediaStore.Downloads.getContentUri(MediaStore.VOLUME_EXTERNAL_PRIMARY)
+                } catch (e: Exception) {
+                    Log.w(TAG, "Could not get VOLUME_EXTERNAL_PRIMARY downloads uri, trying EXTERNAL_CONTENT_URI: ${e.message}")
+                    try {
+                        MediaStore.Downloads.EXTERNAL_CONTENT_URI
+                    } catch (e2: Exception) {
+                        Log.w(TAG, "Fallback to MediaStore.Files collection: ${e2.message}")
+                        MediaStore.Files.getContentUri("external")
                     }
                 }
-                if (bytesCopied <= 0 || !destFile.exists()) {
-                    if (destFile.exists()) destFile.delete()
-                    return SaveResult.Failure("فشل نسخ الملف إلى مجلد التنزيلات")
+
+                Log.d(TAG, "Inserting record into MediaStore collection: $collectionUri")
+                targetUri = resolver.insert(collectionUri, contentValues)
+
+                if (targetUri == null) {
+                    Log.e(TAG, "resolver.insert returned null for MediaStore collection")
+                } else {
+                    Log.d(TAG, "Record inserted successfully, targetUri: $targetUri. Opening OutputStream...")
+                    var bytesCopied: Long = 0
+
+                    val outputStream = resolver.openOutputStream(targetUri, "w")
+                    if (outputStream == null) {
+                        Log.e(TAG, "resolver.openOutputStream returned null for uri: $targetUri")
+                        try {
+                            resolver.delete(targetUri, null, null)
+                        } catch (delEx: Exception) {
+                            Log.e(TAG, "Failed to delete empty record after null stream", delEx)
+                        }
+                    } else {
+                        outputStream.use { os ->
+                            FileInputStream(sourceFile).use { inputStream ->
+                                bytesCopied = inputStream.copyTo(os)
+                                os.flush()
+                            }
+                        }
+
+                        Log.d(TAG, "Stream write completed. Bytes copied: $bytesCopied")
+
+                        if (bytesCopied <= 0) {
+                            Log.e(TAG, "Zero bytes copied to MediaStore uri: $targetUri. Deleting incomplete record...")
+                            try {
+                                resolver.delete(targetUri, null, null)
+                            } catch (delEx: Exception) {
+                                Log.e(TAG, "Failed to delete zero-byte record", delEx)
+                            }
+                        } else {
+                            // Clear IS_PENDING to 0 now that bytes are completely written
+                            val finalizeValues = ContentValues().apply {
+                                put(MediaStore.MediaColumns.IS_PENDING, 0)
+                            }
+                            val updatedCount = resolver.update(targetUri, finalizeValues, null, null)
+                            Log.d(TAG, "Cleared IS_PENDING to 0. Rows updated: $updatedCount. Success confirmed.")
+
+                            return SaveResult.Success(targetUri, targetFileName, bytesCopied)
+                        }
+                    }
                 }
-                val uri = Uri.fromFile(destFile)
-                return SaveResult.Success(uri, targetFileName, bytesCopied)
+            } catch (e: Exception) {
+                Log.e(TAG, "Exception during MediaStore save process: ${e.message}", e)
+                targetUri?.let { uri ->
+                    try {
+                        resolver.delete(uri, null, null)
+                        Log.d(TAG, "Cleaned up incomplete MediaStore entry: $uri")
+                    } catch (delEx: Exception) {
+                        Log.e(TAG, "Failed to clean up MediaStore entry: ${delEx.message}")
+                    }
+                }
             }
+        }
+
+        // 2. Secondary Strategy: Direct Public Downloads Directory (Pre-Q or OEM MediaStore Fallback)
+        Log.w(TAG, "Attempting direct copy to public Downloads directory...")
+        try {
+            @Suppress("DEPRECATION")
+            val downloadsDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
+            if (!downloadsDir.exists()) {
+                val created = downloadsDir.mkdirs()
+                Log.d(TAG, "Created public Downloads directory: $created")
+            }
+
+            val destFile = File(downloadsDir, targetFileName)
+            var bytesCopied: Long = 0
+
+            FileInputStream(sourceFile).use { input ->
+                FileOutputStream(destFile).use { output ->
+                    bytesCopied = input.copyTo(output)
+                    output.flush()
+                }
+            }
+
+            Log.d(TAG, "Direct copy completed. Destination: ${destFile.absolutePath}, bytes: $bytesCopied")
+
+            if (bytesCopied <= 0 || !destFile.exists() || destFile.length() <= 0) {
+                if (destFile.exists()) {
+                    destFile.delete()
+                }
+                val errorMsg = "فشل نسخ الملف إلى مجلد التنزيلات: عدد البايتات المنسوخة $bytesCopied"
+                Log.e(TAG, errorMsg)
+                return SaveResult.Failure(errorMsg)
+            }
+
+            // Trigger system media scan so the file appears immediately in the Files app / Downloads
+            MediaScannerConnection.scanFile(
+                context,
+                arrayOf(destFile.absolutePath),
+                arrayOf("application/pdf")
+            ) { path, scannedUri ->
+                Log.d(TAG, "MediaScanner scanned $path -> $scannedUri")
+            }
+
+            val uri = try {
+                FileProvider.getUriForFile(
+                    context,
+                    "${context.packageName}.fileprovider",
+                    destFile
+                )
+            } catch (fpEx: Exception) {
+                Log.w(TAG, "FileProvider URI resolution failed, using file URI: ${fpEx.message}")
+                Uri.fromFile(destFile)
+            }
+
+            Log.d(TAG, "Direct fallback succeeded: $destFile ($bytesCopied bytes)")
+            return SaveResult.Success(uri, targetFileName, bytesCopied)
         } catch (e: Exception) {
-            targetUri?.let { uri ->
-                try {
-                    resolver.delete(uri, null, null)
-                } catch (_: Exception) {}
-            }
-            return SaveResult.Failure("حدث خطأ أثناء حفظ الملف: ${e.localizedMessage ?: e.message}")
+            val errorMsg = "فشل حفظ الملف في مجلد التنزيلات: ${e.localizedMessage ?: e.message}"
+            Log.e(TAG, errorMsg, e)
+            return SaveResult.Failure(errorMsg)
         }
     }
 
@@ -117,7 +205,7 @@ object PdfExporter {
             }
             context.startActivity(chooser)
         } catch (e: Exception) {
-            e.printStackTrace()
+            Log.e(TAG, "Failed to share PDF: ${e.message}", e)
         }
     }
 }

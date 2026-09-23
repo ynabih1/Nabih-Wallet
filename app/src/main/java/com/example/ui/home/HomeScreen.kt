@@ -46,10 +46,15 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.R
 import com.example.data.local.entity.TransactionEntity
+import androidx.compose.material.icons.filled.Visibility
+import androidx.compose.material.icons.filled.VisibilityOff
+import androidx.compose.material3.IconButton
 import com.example.ui.DebtFilter
 import com.example.ui.WalletViewModel
 import com.example.ui.components.Formatters
 import com.example.ui.components.TransactionRowItem
+import com.example.ui.components.EmptyStateView
+import androidx.compose.material.icons.filled.ReceiptLong
 import androidx.compose.ui.platform.LocalContext
 import com.example.ui.notifications.NotificationCenterDialog
 import com.example.ui.settings.BudgetSettingDialog
@@ -386,31 +391,12 @@ fun HomeScreen(
         // 5. Recent Transactions List
         if (recentTransactions.isEmpty()) {
             item {
-                Surface(
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(16.dp),
-                    color = WarmCardSurface,
-                    border = androidx.compose.foundation.BorderStroke(1.dp, BorderSubtle)
-                ) {
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(28.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally
-                    ) {
-                        Text(
-                            text = stringResource(R.string.no_transactions_yet),
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = TextSecondaryBrown
-                        )
-                        Spacer(modifier = Modifier.height(4.dp))
-                        Text(
-                            text = stringResource(R.string.add_first_transaction),
-                            style = MaterialTheme.typography.bodySmall,
-                            color = TextMutedBrown
-                        )
-                    }
-                }
+                EmptyStateView(
+                    icon = Icons.Default.ReceiptLong,
+                    title = stringResource(R.string.no_transactions_yet),
+                    description = stringResource(R.string.add_first_transaction),
+                    modifier = Modifier.fillMaxWidth()
+                )
             }
         } else {
             items(recentTransactions, key = { it.id }) { tx ->

@@ -1,8 +1,13 @@
 package com.example.ui.reports
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -11,26 +16,33 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.CalendarMonth
+import androidx.compose.material.icons.filled.ChevronLeft
+import androidx.compose.material.icons.filled.ChevronRight
+import androidx.compose.material.icons.filled.DateRange
 import androidx.compose.material.icons.filled.Download
-import androidx.compose.material.icons.filled.PieChart
+import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.Share
+import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -38,38 +50,57 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.example.data.local.entity.TransactionEntity
-import com.example.model.DebtWithPayments
+import com.example.model.FinancialConstants
 import com.example.ui.WalletViewModel
+import com.example.ui.components.DateFilterPreset
+import com.example.ui.components.DateFilterUtils
+import com.example.ui.components.DateRangeSelectionDialog
 import com.example.ui.components.Formatters
 import com.example.ui.theme.BorderSubtle
+import com.example.ui.theme.BurntOrangeDark
 import com.example.ui.theme.BurntOrangePrimary
+import com.example.ui.theme.DarkOliveCard
+import com.example.ui.theme.MutedExpenseTerracotta
+import com.example.ui.theme.MutedIncomeGreen
+import com.example.ui.theme.TextMutedBrown
 import com.example.ui.theme.TextPrimaryDark
 import com.example.ui.theme.TextSecondaryBrown
+import com.example.ui.theme.WarmBeigeBackground
 import com.example.ui.theme.WarmCardSurface
+import com.example.ui.theme.WarmOffWhiteSurface
 import java.text.SimpleDateFormat
+import java.util.Calendar
 import java.util.Date
 import java.util.Locale
 
-enum class ClassicReportTab {
-    TRANSACTIONS, DEBTS
-}
+// -------------------------------------------------------------------------
+// Warm & Harmonious Palette (متناسقة تماماً مع هوية تطبيق محفظة نبيه)
+// -------------------------------------------------------------------------
+private val CardWhite = WarmOffWhiteSurface
+private val PillSelectedBg = BurntOrangePrimary
+private val PillUnselectedBg = WarmCardSurface
+private val ArcTrackWarm = Color(0xFFECEAE2)
 
-enum class ReportPeriod(val titleAr: String, val titleEn: String) {
-    ALL("كافة الفترات", "All Time"),
-    THIS_MONTH("هذا الشهر", "This Month"),
-    LAST_MONTH("الشهر الماضي", "Last Month")
-}
+// الألوان المتناسقة للرسم البياني المقوس (Terracotta, Olive, Forest Green, Mustard, Teal, Deep Earth)
+private val WarmArcPalette = listOf(
+    BurntOrangePrimary,                // برتقالي طوبي - هوية التطبيق الأساسية
+    Color(0xFF4A5568),                 // نيلي رمادي عميق
+    MutedIncomeGreen,                  // أخضر مالي هادئ
+    Color(0xFFE29578),                 // مرجاني دافئ
+    Color(0xFF006D77),                 // بترولي عميق
+    Color(0xFFD4A373)                  // خردلي رملي
+)
 
 @Composable
 fun ReportsScreen(
@@ -78,652 +109,606 @@ fun ReportsScreen(
 ) {
     val context = LocalContext.current
     val allTransactions by viewModel.allTransactions.collectAsStateWithLifecycle()
-    val allDebts by viewModel.allDebtsWithPayments.collectAsStateWithLifecycle()
+    val filterStartDate by viewModel.filterStartDate.collectAsStateWithLifecycle()
+    val filterEndDate by viewModel.filterEndDate.collectAsStateWithLifecycle()
+    val filterPreset by viewModel.filterPreset.collectAsStateWithLifecycle()
     val isGenerating by viewModel.isGeneratingPdf.collectAsStateWithLifecycle()
     val language by viewModel.language.collectAsStateWithLifecycle()
-    val currencySymbol = viewModel.getCurrencySymbol()
     val isArabic = language == "ar"
+    val currencySymbol = viewModel.getCurrencySymbol().ifBlank { if (isArabic) "ج.م" else "EGP" }
 
-    var selectedTab by remember { mutableStateOf(ClassicReportTab.TRANSACTIONS) }
-    var selectedPeriod by remember { mutableStateOf(ReportPeriod.ALL) }
+    var showCustomDateDialog by remember { mutableStateOf(false) }
 
-    val periodString = if (isArabic) selectedPeriod.titleAr else selectedPeriod.titleEn
+    // 1. Transactions in Date Range (Expenses)
+    val expenseTransactions = remember(allTransactions, filterStartDate, filterEndDate) {
+        allTransactions.filter {
+            it.type == "EXPENSE" && it.dateMillis in filterStartDate..filterEndDate
+        }
+    }
 
-    LazyColumn(
+    val totalExpenses = remember(expenseTransactions) {
+        expenseTransactions.sumOf { it.amount }
+    }
+
+    // 2. Categories Breakdown & Color Mapping
+    data class CategoryStat(
+        val name: String,
+        val amount: Double,
+        val percentage: Float,
+        val color: Color
+    )
+
+    val categoryStats = remember(expenseTransactions, totalExpenses) {
+        val grouped = expenseTransactions
+            .groupBy { FinancialConstants.normalizeCategoryName(it.category) }
+            .map { (cat, list) -> cat to list.sumOf { it.amount } }
+            .sortedByDescending { it.second }
+
+        val volume = if (totalExpenses > 0.0) totalExpenses else 1.0
+        grouped.mapIndexed { index, pair ->
+            val color = WarmArcPalette[index % WarmArcPalette.size]
+            val pct = (pair.second / volume).toFloat()
+            CategoryStat(pair.first, pair.second, pct, color)
+        }
+    }
+
+    // 3. Month Breakdown Card Data (Last months with spending)
+    val monthlyHistory = remember(allTransactions, isArabic) {
+        val expenses = allTransactions.filter { it.type == "EXPENSE" }
+        val sdf = SimpleDateFormat("MMMM yyyy", if (isArabic) Locale("ar") else Locale.ENGLISH)
+        expenses.groupBy {
+            val cal = Calendar.getInstance().apply {
+                timeInMillis = it.dateMillis
+                set(Calendar.DAY_OF_MONTH, 1)
+                set(Calendar.HOUR_OF_DAY, 0)
+                set(Calendar.MINUTE, 0)
+                set(Calendar.SECOND, 0)
+                set(Calendar.MILLISECOND, 0)
+            }
+            cal.timeInMillis
+        }.map { (monthMillis, list) ->
+            Triple(monthMillis, sdf.format(Date(monthMillis)), list.sumOf { it.amount })
+        }.sortedByDescending { it.first }
+        .take(4)
+    }
+
+    // Date range labels
+    val formattedStart = remember(filterStartDate) { DateFilterUtils.formatDateArabic(filterStartDate) }
+    val formattedEnd = remember(filterEndDate) { DateFilterUtils.formatDateArabic(filterEndDate) }
+    val periodDisplay = remember(filterPreset, formattedStart, formattedEnd, isArabic) {
+        when (filterPreset) {
+            DateFilterPreset.THIS_MONTH -> if (isArabic) "هذا الشهر ($formattedStart - $formattedEnd)" else "This Month ($formattedStart - $formattedEnd)"
+            DateFilterPreset.LAST_3_MONTHS -> if (isArabic) "آخر 3 شهور ($formattedStart - $formattedEnd)" else "Last 3 Months ($formattedStart - $formattedEnd)"
+            DateFilterPreset.THIS_YEAR -> if (isArabic) "هذه السنة ($formattedStart - $formattedEnd)" else "This Year ($formattedStart - $formattedEnd)"
+            DateFilterPreset.ALL -> if (isArabic) "كافة الفترات" else "All Time"
+            DateFilterPreset.CUSTOM -> "$formattedStart - $formattedEnd"
+        }
+    }
+
+    val periodSubText = remember(filterPreset, formattedStart, formattedEnd, isArabic) {
+        if (filterPreset == DateFilterPreset.ALL) {
+            if (isArabic) "كافة الفترات المسجلة" else "All recorded transactions"
+        } else {
+            "$formattedStart - $formattedEnd"
+        }
+    }
+
+    Box(
         modifier = modifier
             .fillMaxSize()
-            .padding(horizontal = 18.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp)
+            .background(WarmBeigeBackground)
     ) {
-        // 1. Header with Original PieChart Icon
-        item {
-            Spacer(modifier = Modifier.height(10.dp))
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Box(
+        LazyColumn(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(horizontal = 16.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
+            item { Spacer(modifier = Modifier.height(10.dp)) }
+
+            // =========================================================================
+            // 1. TOP CONTROLS CARD (قسم التحكم العلوي مع تصفح التاريخ السريع المحسن)
+            // «هذا الشهر» | «آخر 3 شهور» | «هذه السنة» | مخصص
+            // =========================================================================
+            item {
+                Surface(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(24.dp),
+                    color = CardWhite,
+                    border = BorderStroke(1.dp, BorderSubtle),
+                    shadowElevation = 1.dp
+                ) {
+                    Column(
                         modifier = Modifier
-                            .size(38.dp)
-                            .clip(RoundedCornerShape(10.dp))
-                            .background(BurntOrangePrimary),
-                        contentAlignment = Alignment.Center
+                            .fillMaxWidth()
+                            .padding(18.dp)
                     ) {
-                        Icon(
-                            imageVector = Icons.Default.PieChart,
-                            contentDescription = null,
-                            tint = Color.White,
-                            modifier = Modifier.size(20.dp)
+                        // Title + Active Period Range
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = if (isArabic) "المصروفات" else "Spending",
+                                fontSize = 20.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = TextPrimaryDark
+                            )
+
+                            // Clickable Date Picker trigger
+                            Surface(
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(12.dp))
+                                    .clickable { showCustomDateDialog = true }
+                                    .testTag("open_date_picker_btn"),
+                                color = WarmCardSurface,
+                                border = BorderStroke(0.8.dp, BorderSubtle)
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.CalendarMonth,
+                                        contentDescription = null,
+                                        tint = BurntOrangePrimary,
+                                        modifier = Modifier.size(15.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(5.dp))
+                                    Text(
+                                        text = if (isArabic) "تخصيص" else "Custom",
+                                        fontSize = 12.sp,
+                                        fontWeight = FontWeight.SemiBold,
+                                        color = TextPrimaryDark
+                                    )
+                                }
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(14.dp))
+
+                        // Quick Filter Pills Row (هذا الشهر | آخر 3 شهور | هذه السنة | الكل)
+                        val quickPresets = listOf(
+                            DateFilterPreset.THIS_MONTH,
+                            DateFilterPreset.LAST_3_MONTHS,
+                            DateFilterPreset.THIS_YEAR,
+                            DateFilterPreset.ALL
                         )
+
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .horizontalScroll(rememberScrollState()),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            quickPresets.forEach { preset ->
+                                val isSelected = filterPreset == preset
+                                val label = when (preset) {
+                                    DateFilterPreset.THIS_MONTH -> if (isArabic) "هذا الشهر" else "This Month"
+                                    DateFilterPreset.LAST_3_MONTHS -> if (isArabic) "آخر 3 شهور" else "Last 3 Months"
+                                    DateFilterPreset.THIS_YEAR -> if (isArabic) "هذه السنة" else "This Year"
+                                    DateFilterPreset.ALL -> if (isArabic) "الكل" else "All Time"
+                                    else -> if (isArabic) preset.titleAr else preset.titleEn
+                                }
+
+                                Surface(
+                                    modifier = Modifier
+                                        .clip(RoundedCornerShape(14.dp))
+                                        .clickable {
+                                            val range = DateFilterUtils.calculatePresetRange(preset, allTransactions)
+                                            viewModel.setDateFilter(range.first, range.second, preset)
+                                        }
+                                        .testTag("filter_pill_${preset.name.lowercase()}"),
+                                    shape = RoundedCornerShape(14.dp),
+                                    color = if (isSelected) BurntOrangePrimary else PillUnselectedBg,
+                                    border = BorderStroke(1.dp, if (isSelected) BurntOrangePrimary else BorderSubtle)
+                                ) {
+                                    Text(
+                                        text = label,
+                                        fontSize = 12.5.sp,
+                                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                                        color = if (isSelected) Color.White else TextPrimaryDark,
+                                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp)
+                                    )
+                                }
+                            }
+                        }
                     }
-                    Spacer(modifier = Modifier.width(12.dp))
-                    Column {
+                }
+            }
+
+            // =========================================================================
+            // 2. MAIN CHART CARD (كارت الرسم البياني والمبلغ الإجمالي)
+            // Displays:
+            // - Top: Total Amount in bold, active date range below in TextSecondaryBrown
+            // - Center: Semi-donut Arc Chart in harmonious warm colors
+            // - Bottom: Categories breakdown with color dot, percentage, and amount
+            // =========================================================================
+            item {
+                Surface(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(24.dp),
+                    color = CardWhite,
+                    border = BorderStroke(1.dp, BorderSubtle),
+                    shadowElevation = 1.5.dp
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(22.dp)
+                    ) {
+                        // Header Row: Amount + Date Subtitle on one side, Filter button on the other
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.Top
+                        ) {
+                            Column {
+                                Text(
+                                    text = "${Formatters.formatMoney(totalExpenses)} $currencySymbol",
+                                    fontSize = 30.sp,
+                                    fontWeight = FontWeight.ExtraBold,
+                                    color = TextPrimaryDark,
+                                    letterSpacing = (-0.5).sp
+                                )
+                                Spacer(modifier = Modifier.height(3.dp))
+                                Text(
+                                    text = periodSubText,
+                                    fontSize = 12.sp,
+                                    color = TextSecondaryBrown
+                                )
+                            }
+
+                            // Filter ⊶ Oval Button (Opens custom date dialog)
+                            Surface(
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(14.dp))
+                                    .clickable { showCustomDateDialog = true },
+                                color = WarmCardSurface,
+                                border = BorderStroke(0.8.dp, BorderSubtle)
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text(
+                                        text = if (isArabic) "تحديد تاريخ" else "Filter",
+                                        fontSize = 12.sp,
+                                        fontWeight = FontWeight.SemiBold,
+                                        color = TextPrimaryDark
+                                    )
+                                    Spacer(modifier = Modifier.width(5.dp))
+                                    Icon(
+                                        imageVector = Icons.Default.Tune,
+                                        contentDescription = null,
+                                        tint = BurntOrangePrimary,
+                                        modifier = Modifier.size(14.dp)
+                                    )
+                                }
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(20.dp))
+
+                        // Semi-donut / Arc Chart (Sweep Arc with StrokeCap.Round)
+                        SemiCircleSpendingArcChart(
+                            percentages = categoryStats.map { it.percentage },
+                            colors = categoryStats.map { it.color },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(145.dp)
+                        )
+
+                        Spacer(modifier = Modifier.height(20.dp))
+
+                        // Categories Breakdown Title
                         Text(
-                            text = if (isArabic) "التقارير وتصدير PDF" else "Reports & Export PDF",
-                            style = MaterialTheme.typography.titleLarge,
+                            text = if (isArabic) "الفئات" else "Categories",
+                            fontSize = 16.sp,
                             fontWeight = FontWeight.Bold,
                             color = TextPrimaryDark
                         )
-                        Text(
-                            text = if (isArabic) "تصدير بيان مالي منظم بصيغة PDF" else "Export organized financial statement",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = TextSecondaryBrown
-                        )
+
+                        Spacer(modifier = Modifier.height(12.dp))
+
+                        if (categoryStats.isEmpty()) {
+                            Text(
+                                text = if (isArabic) "لا توجد مصروفات مسجلة في هذه الفترة" else "No expenses recorded for this period",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = TextMutedBrown,
+                                modifier = Modifier.padding(vertical = 12.dp)
+                            )
+                        } else {
+                            categoryStats.forEach { cat ->
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(vertical = 8.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.SpaceBetween
+                                ) {
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Box(
+                                            modifier = Modifier
+                                                .size(10.dp)
+                                                .clip(CircleShape)
+                                                .background(cat.color)
+                                        )
+                                        Spacer(modifier = Modifier.width(10.dp))
+                                        Text(
+                                            text = cat.name,
+                                            fontSize = 14.sp,
+                                            fontWeight = FontWeight.Medium,
+                                            color = TextPrimaryDark
+                                        )
+                                        Spacer(modifier = Modifier.width(6.dp))
+                                        Text(
+                                            text = "(${String.format(Locale.US, "%.1f", cat.percentage * 100)}%)",
+                                            fontSize = 11.5.sp,
+                                            color = TextSecondaryBrown
+                                        )
+                                    }
+
+                                    Text(
+                                        text = "${Formatters.formatMoney(cat.amount)} $currencySymbol",
+                                        fontSize = 14.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = TextPrimaryDark
+                                    )
+                                }
+                            }
+                        }
                     }
                 }
             }
-        }
 
-        // 2. 2-Tab Selector (Transactions vs Debts)
-        item {
-            Surface(
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(14.dp),
-                color = WarmCardSurface,
-                border = androidx.compose.foundation.BorderStroke(1.dp, BorderSubtle)
-            ) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(4.dp)
-                ) {
-                    val isTransactions = selectedTab == ClassicReportTab.TRANSACTIONS
-                    Box(
-                        modifier = Modifier
-                            .weight(1f)
-                            .clip(RoundedCornerShape(10.dp))
-                            .background(if (isTransactions) BurntOrangePrimary else Color.Transparent)
-                            .clickable { selectedTab = ClassicReportTab.TRANSACTIONS }
-                            .padding(vertical = 10.dp),
-                        contentAlignment = Alignment.Center
+            // =========================================================================
+            // 3. MONTH BREAKDOWN CARD (كارت التاريخ/الشهور السفلي)
+            // Displays month name, total spending and directional chevron >
+            // =========================================================================
+            if (monthlyHistory.isNotEmpty()) {
+                item {
+                    Surface(
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(24.dp),
+                        color = CardWhite,
+                        border = BorderStroke(1.dp, BorderSubtle),
+                        shadowElevation = 1.dp
                     ) {
-                        Text(
-                            text = if (isArabic) "تقرير المعاملات" else "Transactions",
-                            color = if (isTransactions) Color.White else TextPrimaryDark,
-                            fontWeight = if (isTransactions) FontWeight.Bold else FontWeight.Medium,
-                            style = MaterialTheme.typography.bodyMedium
-                        )
-                    }
-
-                    val isDebts = selectedTab == ClassicReportTab.DEBTS
-                    Box(
-                        modifier = Modifier
-                            .weight(1f)
-                            .clip(RoundedCornerShape(10.dp))
-                            .background(if (isDebts) BurntOrangePrimary else Color.Transparent)
-                            .clickable { selectedTab = ClassicReportTab.DEBTS }
-                            .padding(vertical = 10.dp),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text(
-                            text = if (isArabic) "تقرير الديون" else "Debts",
-                            color = if (isDebts) Color.White else TextPrimaryDark,
-                            fontWeight = if (isDebts) FontWeight.Bold else FontWeight.Medium,
-                            style = MaterialTheme.typography.bodyMedium
-                        )
-                    }
-                }
-            }
-        }
-
-        // 3. Period Selector (For Transactions)
-        if (selectedTab == ClassicReportTab.TRANSACTIONS) {
-            item {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    ReportPeriod.entries.forEach { period ->
-                        val isSelected = selectedPeriod == period
-                        val title = if (isArabic) period.titleAr else period.titleEn
-                        Surface(
+                        Column(
                             modifier = Modifier
-                                .weight(1f)
-                                .clip(RoundedCornerShape(10.dp))
-                                .clickable { selectedPeriod = period },
-                            color = if (isSelected) BurntOrangePrimary else WarmCardSurface,
-                            shape = RoundedCornerShape(10.dp),
-                            border = androidx.compose.foundation.BorderStroke(1.dp, if (isSelected) BurntOrangePrimary else BorderSubtle)
+                                .fillMaxWidth()
+                                .padding(20.dp)
                         ) {
                             Text(
-                                text = title,
-                                modifier = Modifier.padding(vertical = 8.dp),
-                                textAlign = TextAlign.Center,
-                                style = MaterialTheme.typography.bodySmall,
-                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
-                                color = if (isSelected) Color.White else TextPrimaryDark
+                                text = if (isArabic) "الشهور" else "Month",
+                                fontSize = 16.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = TextPrimaryDark
                             )
+
+                            Spacer(modifier = Modifier.height(10.dp))
+
+                            monthlyHistory.forEachIndexed { index, (_, monthTitle, amount) ->
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(vertical = 10.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.SpaceBetween
+                                ) {
+                                    Text(
+                                        text = monthTitle,
+                                        fontSize = 13.5.sp,
+                                        fontWeight = FontWeight.Normal,
+                                        color = TextPrimaryDark
+                                    )
+
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Text(
+                                            text = "${Formatters.formatMoney(amount)} $currencySymbol",
+                                            fontSize = 14.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            color = TextPrimaryDark
+                                        )
+                                        Spacer(modifier = Modifier.width(8.dp))
+                                        Icon(
+                                            imageVector = if (isArabic) Icons.Default.ChevronLeft else Icons.Default.ChevronRight,
+                                            contentDescription = null,
+                                            tint = TextSecondaryBrown,
+                                            modifier = Modifier.size(18.dp)
+                                        )
+                                    }
+                                }
+
+                                if (index < monthlyHistory.lastIndex) {
+                                    Spacer(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .height(0.6.dp)
+                                            .background(BorderSubtle.copy(alpha = 0.6f))
+                                    )
+                                }
+                            }
                         }
                     }
                 }
             }
+
+            // Bottom spacing to avoid content overlap by the floating export bar
+            item { Spacer(modifier = Modifier.height(96.dp)) }
         }
 
-        // 4. Exact Visual PDF Preview Card (Matching ExportUtils)
-        item {
-            Surface(
+        // =========================================================================
+        // 4. FLOATING EXPORT & SHARE BAR (أزرار التصدير العائمة في الأسفل)
+        // Light floating pill container with download and share buttons
+        // =========================================================================
+        Surface(
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .fillMaxWidth()
+                .navigationBarsPadding()
+                .padding(horizontal = 16.dp, vertical = 12.dp),
+            shape = RoundedCornerShape(22.dp),
+            color = CardWhite,
+            border = BorderStroke(1.dp, BorderSubtle),
+            shadowElevation = 6.dp
+        ) {
+            Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .testTag("pdf_preview_card"),
-                shape = RoundedCornerShape(14.dp),
-                color = Color.White,
-                border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFE7DFD2)),
-                shadowElevation = 2.dp
+                    .padding(10.dp),
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(18.dp)
-                ) {
-                    // Document Header
-                    Column(modifier = Modifier.fillMaxWidth()) {
-                        val statementName = when (selectedTab) {
-                            ClassicReportTab.TRANSACTIONS -> "تقرير: بيان المصروفات الشخصية"
-                            ClassicReportTab.DEBTS -> "تقرير: المديونيات"
-                        }
-                        Text(
-                            text = statementName,
-                            fontSize = 19.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = Color(0xFF2B2620)
-                        )
-
-                        Spacer(modifier = Modifier.height(8.dp))
-
-                        val expenseList = allTransactions.filter { it.type == "EXPENSE" }
-                        val targetList = if (expenseList.isNotEmpty()) expenseList else allTransactions
-                        val computedPeriod = if (targetList.isNotEmpty()) {
-                            val minD = targetList.minOf { it.dateMillis }
-                            val maxD = targetList.maxOf { it.dateMillis }
-                            val sdf = SimpleDateFormat("yyyy/MM/dd", Locale.US)
-                            "من ${sdf.format(Date(minD))} إلى ${sdf.format(Date(maxD))}"
-                        } else {
-                            periodString
-                        }
-
-                        if (selectedTab == ClassicReportTab.TRANSACTIONS) {
-                            Text(
-                                text = "الفترة: $computedPeriod",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = Color(0xFF8A8171)
-                            )
-                        }
-
-                        val issueDateStr = SimpleDateFormat("d MMMM yyyy", Locale("ar")).format(Date())
-                        Text(
-                            text = "تاريخ إصدار التقرير: $issueDateStr",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = Color(0xFF8A8171)
-                        )
-
-                        val count = if (selectedTab == ClassicReportTab.TRANSACTIONS) {
-                            targetList.groupBy { it.category }.size
-                        } else allDebts.map { it.debt.personName }.distinct().size
-
-                        Text(
-                            text = if (selectedTab == ClassicReportTab.TRANSACTIONS) "عدد البنود: $count" else "عدد الأشخاص: $count",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = Color(0xFF8A8171)
-                        )
-                    }
-
-                    Spacer(modifier = Modifier.height(14.dp))
-
-                    // Preview Table
-                    when (selectedTab) {
-                        ClassicReportTab.TRANSACTIONS -> {
-                            TransactionsPdfTablePreview(
-                                transactions = allTransactions,
-                                currencySymbol = currencySymbol,
-                                isArabic = isArabic
-                            )
-                        }
-                        ClassicReportTab.DEBTS -> {
-                            DebtsPdfTablePreview(
-                                debts = allDebts,
-                                currencySymbol = currencySymbol,
-                                isArabic = isArabic
-                            )
-                        }
-                    }
-
-                    Spacer(modifier = Modifier.height(16.dp))
-                    Text(
-                        text = "تم إنشاء هذا التقرير بواسطة Nabih Wallet",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = Color(0xFF8A8171)
-                    )
-                }
-            }
-        }
-
-        // 5. Action Buttons (Export to Downloads & Share)
-        item {
-            Column(
-                modifier = Modifier.fillMaxWidth(),
-                verticalArrangement = Arrangement.spacedBy(10.dp)
-            ) {
-                // Primary Action: Export directly to Downloads
+                // PDF Export Button
                 Button(
                     onClick = {
-                        when (selectedTab) {
-                            ClassicReportTab.TRANSACTIONS -> viewModel.exportExpensesPdfToDownloads(context, periodString)
-                            ClassicReportTab.DEBTS -> viewModel.exportDebtsPdfToDownloads(context)
-                        }
+                        viewModel.exportExpensesPdfToDownloads(
+                            context = context,
+                            periodTitle = periodDisplay,
+                            customTransactions = expenseTransactions,
+                            startDateStr = formattedStart,
+                            endDateStr = formattedEnd
+                        )
                     },
-                    enabled = !isGenerating,
+                    enabled = !isGenerating && expenseTransactions.isNotEmpty(),
+                    shape = RoundedCornerShape(16.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = BurntOrangePrimary,
+                        disabledContainerColor = BurntOrangePrimary.copy(alpha = 0.4f)
+                    ),
                     modifier = Modifier
-                        .fillMaxWidth()
-                        .height(52.dp)
-                        .testTag("export_pdf_button"),
-                    shape = RoundedCornerShape(12.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = BurntOrangePrimary)
+                        .weight(1f)
+                        .height(48.dp)
+                        .testTag("export_pdf_btn")
                 ) {
                     if (isGenerating) {
                         CircularProgressIndicator(
                             color = Color.White,
-                            modifier = Modifier.size(22.dp),
+                            modifier = Modifier.size(18.dp),
                             strokeWidth = 2.dp
                         )
-                        Spacer(modifier = Modifier.width(10.dp))
+                        Spacer(modifier = Modifier.width(8.dp))
                         Text(
-                            text = if (isArabic) "جاري إنشاء وتصدير ملف PDF..." else "Generating PDF Report...",
+                            text = if (isArabic) "جاري الإنشاء..." else "Generating...",
+                            fontSize = 13.5.sp,
+                            fontWeight = FontWeight.Bold,
                             color = Color.White
                         )
                     } else {
                         Icon(
                             imageVector = Icons.Default.Download,
                             contentDescription = null,
-                            tint = Color.White
+                            tint = Color.White,
+                            modifier = Modifier.size(18.dp)
                         )
                         Spacer(modifier = Modifier.width(8.dp))
                         Text(
-                            text = if (isArabic) "حفظ وتصدير PDF في التنزيلات" else "Export PDF to Downloads",
-                            style = MaterialTheme.typography.titleMedium,
+                            text = if (isArabic) "تصدير تقرير PDF" else "Export PDF Report",
+                            fontSize = 13.5.sp,
                             fontWeight = FontWeight.Bold,
                             color = Color.White
                         )
                     }
                 }
 
-                // Secondary Action: Share PDF
+                // Quick Share Button
                 OutlinedButton(
                     onClick = {
-                        when (selectedTab) {
-                            ClassicReportTab.TRANSACTIONS -> viewModel.shareExpensesPdf(context, periodString)
-                            ClassicReportTab.DEBTS -> viewModel.shareDebtsPdf(context)
-                        }
+                        viewModel.shareExpensesPdf(
+                            context = context,
+                            periodTitle = periodDisplay,
+                            customTransactions = expenseTransactions,
+                            startDateStr = formattedStart,
+                            endDateStr = formattedEnd
+                        )
                     },
-                    enabled = !isGenerating,
+                    enabled = !isGenerating && expenseTransactions.isNotEmpty(),
+                    shape = RoundedCornerShape(16.dp),
+                    border = BorderStroke(1.dp, BorderSubtle),
                     modifier = Modifier
-                        .fillMaxWidth()
-                        .height(50.dp)
-                        .testTag("share_pdf_button"),
-                    shape = RoundedCornerShape(12.dp),
-                    border = androidx.compose.foundation.BorderStroke(1.dp, BurntOrangePrimary)
+                        .size(48.dp)
+                        .testTag("share_pdf_btn")
                 ) {
                     Icon(
                         imageVector = Icons.Default.Share,
-                        contentDescription = null,
-                        tint = BurntOrangePrimary
-                    )
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text(
-                        text = if (isArabic) "مشاركة ملف الـ PDF" else "Share PDF Report",
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.SemiBold,
-                        color = BurntOrangePrimary
+                        contentDescription = if (isArabic) "مشاركة" else "Share",
+                        tint = BurntOrangePrimary,
+                        modifier = Modifier.size(20.dp)
                     )
                 }
             }
         }
 
-        item {
-            Spacer(modifier = Modifier.height(80.dp))
-        }
-    }
-}
-
-@Composable
-fun TransactionsPdfTablePreview(
-    transactions: List<TransactionEntity>,
-    currencySymbol: String,
-    isArabic: Boolean
-) {
-    val expenseTransactions = transactions.filter { it.type == "EXPENSE" }
-    val targetList = if (expenseTransactions.isNotEmpty()) expenseTransactions else transactions
-
-    data class CatRow(val name: String, val amount: Double, val note: String)
-    val expenseByCategory = targetList
-        .groupBy { it.category }
-        .map { (name, items) ->
-            val distinctNotes = items.map { it.notes.trim() }
-                .filter { it.isNotEmpty() }
-                .distinct()
-            val noteText = if (distinctNotes.isEmpty()) "" else distinctNotes.joinToString("، ")
-            CatRow(name, items.sumOf { it.amount }, noteText)
-        }
-        .sortedByDescending { it.amount }
-
-    val totalExpenses = targetList.sumOf { it.amount }
-    val totalVolume = if (totalExpenses > 0) totalExpenses else 1.0
-
-    val primaryColor = Color(0xFFB4622F)
-    val rowAltBg = Color(0xFFFBF7F0)
-    val totalRowBg = Color(0xFFF3E4D3)
-    val borderColor = Color(0xFFE7DFD2)
-    val textDark = Color(0xFF2B2620)
-    val textMuted = Color(0xFF8A8171)
-
-    Column(modifier = Modifier.fillMaxWidth()) {
-        // Table Container
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .clip(RoundedCornerShape(6.dp))
-                .border(0.7.dp, borderColor, RoundedCornerShape(6.dp))
-        ) {
-            val amountHeader = if (currencySymbol.isNotBlank()) "المبلغ ($currencySymbol)" else "المبلغ"
-
-            // Table Header
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .background(primaryColor)
-                    .padding(vertical = 8.dp, horizontal = 8.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text("م", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 10.5.sp, modifier = Modifier.width(22.dp), textAlign = TextAlign.Center)
-                Text("البيان", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 10.5.sp, modifier = Modifier.weight(1.3f))
-                Text(amountHeader, color = Color.White, fontWeight = FontWeight.Bold, fontSize = 10.5.sp, modifier = Modifier.weight(1.1f), textAlign = TextAlign.Center)
-                Text("النسبة", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 10.5.sp, modifier = Modifier.width(42.dp), textAlign = TextAlign.Center)
-                Text("ملاحظات", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 10.5.sp, modifier = Modifier.weight(1f))
-            }
-
-            if (expenseByCategory.isEmpty()) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(16.dp),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(
-                        text = "لا توجد مصروفات مسجلة لهذه الفترة",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = textMuted
-                    )
+        // Custom Date Range Dialog
+        if (showCustomDateDialog) {
+            DateRangeSelectionDialog(
+                currentStartMillis = filterStartDate,
+                currentEndMillis = filterEndDate,
+                isArabic = isArabic,
+                onDismiss = { showCustomDateDialog = false },
+                onApply = { start, end ->
+                    showCustomDateDialog = false
+                    viewModel.setDateFilter(start, end, DateFilterPreset.CUSTOM)
                 }
-            } else {
-                expenseByCategory.take(8).forEachIndexed { index, row ->
-                    val pct = (row.amount / totalVolume) * 100.0
-                    val pctStr = "${String.format(Locale.US, "%.1f", pct)}%"
-                    val rowBg = if (index % 2 == 1) rowAltBg else Color.White
-
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .background(rowBg)
-                            .border(0.5.dp, borderColor)
-                            .padding(vertical = 7.dp, horizontal = 8.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text("${index + 1}", color = textDark, fontSize = 10.5.sp, modifier = Modifier.width(22.dp), textAlign = TextAlign.Center)
-                        Text(row.name, color = textDark, fontSize = 10.5.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1.3f), maxLines = 1)
-                        Text(Formatters.formatMoney(row.amount), color = textDark, fontSize = 10.5.sp, modifier = Modifier.weight(1.1f), textAlign = TextAlign.Center)
-                        Text(pctStr, color = textDark, fontSize = 10.5.sp, modifier = Modifier.width(42.dp), textAlign = TextAlign.Center)
-                        Text(row.note.ifBlank { "-" }, color = textMuted, fontSize = 10.sp, modifier = Modifier.weight(1f), maxLines = 1)
-                    }
-                }
-
-                // Table Summary Row
-                val totalAmountFormatted = if (currencySymbol.isNotBlank()) "${Formatters.formatMoney(totalExpenses)} $currencySymbol" else Formatters.formatMoney(totalExpenses)
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .background(totalRowBg)
-                        .border(0.5.dp, borderColor)
-                        .padding(vertical = 8.dp, horizontal = 8.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(
-                        text = "إجمالي المصروفات",
-                        color = textDark,
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 11.sp
-                    )
-                    Text(
-                        text = totalAmountFormatted,
-                        color = textDark,
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 11.sp
-                    )
-                }
-            }
-        }
-
-        // Summary Preview Section matching ExportUtils
-        Spacer(modifier = Modifier.height(16.dp))
-        HorizontalDivider(color = borderColor, thickness = 0.7.dp)
-        Spacer(modifier = Modifier.height(12.dp))
-
-        val currSuffix = if (currencySymbol.isNotBlank()) " $currencySymbol" else ""
-
-        Text(
-            text = "الملخص",
-            style = MaterialTheme.typography.titleMedium,
-            fontWeight = FontWeight.Bold,
-            color = textDark
-        )
-        Spacer(modifier = Modifier.height(6.dp))
-        Text(
-            text = "• إجمالي المصروفات خلال الفترة: ${Formatters.formatMoney(totalExpenses)}$currSuffix",
-            style = MaterialTheme.typography.bodySmall,
-            color = textDark
-        )
-
-        val monthsCount = 12.0
-        val monthlyAvg = totalExpenses / monthsCount
-        Spacer(modifier = Modifier.height(4.dp))
-        Text(
-            text = "• متوسط الإنفاق الشهري: ${Formatters.formatMoney(monthlyAvg)}$currSuffix / شهر",
-            style = MaterialTheme.typography.bodySmall,
-            color = textDark
-        )
-
-        if (expenseByCategory.isNotEmpty() && totalExpenses > 0) {
-            val topCategory = expenseByCategory.first()
-            val topPct = (topCategory.amount / totalExpenses) * 100.0
-            Spacer(modifier = Modifier.height(4.dp))
-            Text(
-                text = "• أعلى بند إنفاق: ${topCategory.name} (${String.format(Locale.US, "%.1f", topPct)}% من الإجمالي)",
-                style = MaterialTheme.typography.bodySmall,
-                color = textDark
             )
-            val bottomCategory = expenseByCategory.last()
-            if (bottomCategory != topCategory) {
-                val botPct = (bottomCategory.amount / totalExpenses) * 100.0
-                Spacer(modifier = Modifier.height(4.dp))
-                Text(
-                    text = "• أقل بند إنفاق: ${bottomCategory.name} (${String.format(Locale.US, "%.1f", botPct)}% من الإجمالي)",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = textDark
-                )
-            }
         }
     }
 }
 
+/**
+ * Semi-donut / Arc Chart (SemiCircleSpendingArcChart)
+ * Draws a wide, smooth sweep arc via Compose Canvas with StrokeCap.Round
+ */
 @Composable
-fun DebtsPdfTablePreview(
-    debts: List<DebtWithPayments>,
-    currencySymbol: String,
-    isArabic: Boolean
+fun SemiCircleSpendingArcChart(
+    percentages: List<Float>,
+    colors: List<Color>,
+    modifier: Modifier = Modifier
 ) {
-    val totalOwedToMe = debts.filter { it.debt.type == "OWED_TO_ME" }.sumOf { it.remainingAmount }
-    val totalIOwe = debts.filter { it.debt.type == "I_OWE" }.sumOf { it.remainingAmount }
-    val netDebts = totalOwedToMe - totalIOwe
+    val progress = remember { Animatable(0f) }
 
-    val primaryColor = Color(0xFFB4622F)
-    val rowAltBg = Color(0xFFFBF7F0)
-    val borderColor = Color(0xFFE7DFD2)
-    val textDark = Color(0xFF2B2620)
-    val textMuted = Color(0xFF8A8171)
-    val greenPositive = Color(0xFF4E7A4E)
-    val redNegative = Color(0xFFB4482F)
-    val sdf = SimpleDateFormat("d MMMM", Locale("ar"))
+    LaunchedEffect(percentages) {
+        progress.snapTo(0f)
+        progress.animateTo(1f, animationSpec = tween(durationMillis = 850))
+    }
 
-    Column(modifier = Modifier.fillMaxWidth()) {
-        // Top 2 Summary Cards matching ExportUtils
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(10.dp)
-        ) {
-            Surface(
-                modifier = Modifier.weight(1f),
-                shape = RoundedCornerShape(8.dp),
-                color = rowAltBg,
-                border = androidx.compose.foundation.BorderStroke(0.7.dp, borderColor)
-            ) {
-                Column(modifier = Modifier.padding(10.dp)) {
-                    Text("إجمالي المستحق لي", style = MaterialTheme.typography.labelSmall, color = textMuted)
-                    Spacer(modifier = Modifier.height(4.dp))
-                    Text(
-                        "${Formatters.formatMoney(totalOwedToMe)} $currencySymbol",
-                        style = MaterialTheme.typography.titleSmall,
-                        fontWeight = FontWeight.Bold,
-                        color = greenPositive
-                    )
-                }
-            }
+    Canvas(modifier = modifier) {
+        val strokeWidth = 32.dp.toPx()
+        val diameter = size.width.coerceAtMost(size.height * 2.1f) - strokeWidth
+        val arcSize = Size(diameter, diameter)
+        val topLeft = Offset((size.width - diameter) / 2f, size.height - diameter / 2f)
 
-            Surface(
-                modifier = Modifier.weight(1f),
-                shape = RoundedCornerShape(8.dp),
-                color = rowAltBg,
-                border = androidx.compose.foundation.BorderStroke(0.7.dp, borderColor)
-            ) {
-                Column(modifier = Modifier.padding(10.dp)) {
-                    Text("إجمالي عليّ", style = MaterialTheme.typography.labelSmall, color = textMuted)
-                    Spacer(modifier = Modifier.height(4.dp))
-                    Text(
-                        "${Formatters.formatMoney(totalIOwe)} $currencySymbol",
-                        style = MaterialTheme.typography.titleSmall,
-                        fontWeight = FontWeight.Bold,
-                        color = redNegative
-                    )
-                }
+        // 1. Subtle background track arc in warm cream
+        drawArc(
+            color = ArcTrackWarm,
+            startAngle = 180f,
+            sweepAngle = 180f,
+            useCenter = false,
+            topLeft = topLeft,
+            size = arcSize,
+            style = Stroke(width = strokeWidth, cap = StrokeCap.Round)
+        )
+
+        // 2. Colored Category Arcs
+        var startAngle = 180f
+        percentages.forEachIndexed { index, pct ->
+            val sweep = pct * 180f * progress.value
+            if (sweep > 0f) {
+                drawArc(
+                    color = colors.getOrElse(index) { Color.LightGray },
+                    startAngle = startAngle,
+                    sweepAngle = sweep,
+                    useCenter = false,
+                    topLeft = topLeft,
+                    size = arcSize,
+                    style = Stroke(width = strokeWidth, cap = StrokeCap.Round)
+                )
+                startAngle += sweep
             }
         }
-
-        Spacer(modifier = Modifier.height(14.dp))
-
-        // Table
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .clip(RoundedCornerShape(6.dp))
-                .border(0.7.dp, borderColor, RoundedCornerShape(6.dp))
-        ) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .background(primaryColor)
-                    .padding(vertical = 8.dp, horizontal = 8.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text("الاسم", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 10.5.sp, modifier = Modifier.weight(1.3f))
-                Text("النوع", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 10.5.sp, modifier = Modifier.weight(0.9f))
-                Text("المبلغ", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 10.5.sp, modifier = Modifier.weight(1.1f), textAlign = TextAlign.Center)
-                Text("آخر عملية", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 10.5.sp, modifier = Modifier.weight(1.1f), textAlign = TextAlign.Center)
-            }
-
-            if (debts.isEmpty()) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(16.dp),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(
-                        text = "لا توجد مديونيات للتصدير",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = textMuted
-                    )
-                }
-            } else {
-                debts.take(8).forEachIndexed { index, item ->
-                    val isOwedToMe = item.debt.type == "OWED_TO_ME"
-                    val typeLabel = if (isOwedToMe) "مستحق لي" else "عليّ"
-                    val typeColor = if (isOwedToMe) greenPositive else redNegative
-                    val lastDate = item.payments.maxOfOrNull { it.paymentDateMillis } ?: item.debt.lentDateMillis
-                    val rowBg = if (index % 2 == 1) rowAltBg else Color.White
-
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .background(rowBg)
-                            .border(0.5.dp, borderColor)
-                            .padding(vertical = 7.dp, horizontal = 8.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(item.debt.personName, color = textDark, fontSize = 10.5.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1.3f), maxLines = 1)
-                        Text(typeLabel, color = typeColor, fontSize = 10.5.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(0.9f))
-                        Text(Formatters.formatMoney(item.remainingAmount), color = textDark, fontSize = 10.5.sp, modifier = Modifier.weight(1.1f), textAlign = TextAlign.Center)
-                        Text(sdf.format(Date(lastDate)), color = textDark, fontSize = 10.sp, modifier = Modifier.weight(1.1f), textAlign = TextAlign.Center)
-                    }
-                }
-            }
-        }
-
-        Spacer(modifier = Modifier.height(16.dp))
-        HorizontalDivider(color = borderColor, thickness = 0.7.dp)
-        Spacer(modifier = Modifier.height(12.dp))
-
-        Text(
-            text = "الملخص",
-            style = MaterialTheme.typography.titleMedium,
-            fontWeight = FontWeight.Bold,
-            color = textDark
-        )
-        Spacer(modifier = Modifier.height(6.dp))
-
-        val netLabel = if (netDebts >= 0) "• الصافي: ${Formatters.formatMoney(netDebts)} $currencySymbol لصالحك"
-                       else "• الصافي: ${Formatters.formatMoney(-netDebts)} $currencySymbol عليك"
-        Text(
-            text = netLabel,
-            style = MaterialTheme.typography.bodySmall,
-            color = textDark
-        )
-
-        val overdueCount = debts.count { it.debt.dueDateMillis?.let { d -> d < System.currentTimeMillis() && !it.isFullyPaid } ?: false }
-        Spacer(modifier = Modifier.height(4.dp))
-        Text(
-            text = "• عدد الديون المتأخرة: $overdueCount",
-            style = MaterialTheme.typography.bodySmall,
-            color = textDark
-        )
     }
 }

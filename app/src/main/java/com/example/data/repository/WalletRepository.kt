@@ -2,9 +2,11 @@ package com.example.data.repository
 
 import com.example.data.local.dao.DebtDao
 import com.example.data.local.dao.DebtPaymentDao
+import com.example.data.local.dao.PaymentMethodDao
 import com.example.data.local.dao.TransactionDao
 import com.example.data.local.entity.DebtEntity
 import com.example.data.local.entity.DebtPaymentEntity
+import com.example.data.local.entity.PaymentMethodEntity
 import com.example.data.local.entity.TransactionEntity
 import com.example.model.DebtWithPayments
 import kotlinx.coroutines.flow.Flow
@@ -13,8 +15,31 @@ import kotlinx.coroutines.flow.combine
 class WalletRepository(
     private val transactionDao: TransactionDao,
     private val debtDao: DebtDao,
-    private val debtPaymentDao: DebtPaymentDao
+    private val debtPaymentDao: DebtPaymentDao,
+    private val paymentMethodDao: PaymentMethodDao
 ) {
+    // Payment Methods
+    val allPaymentMethods: Flow<List<PaymentMethodEntity>> = paymentMethodDao.getAllPaymentMethods()
+
+    suspend fun getAllPaymentMethodsSync(): List<PaymentMethodEntity> =
+        paymentMethodDao.getAllPaymentMethodsSync()
+
+    suspend fun insertPaymentMethod(name: String): Long {
+        val trimmed = name.trim()
+        if (trimmed.isBlank()) return -1
+        val existing = paymentMethodDao.getByName(trimmed)
+        return if (existing != null) {
+            existing.id
+        } else {
+            paymentMethodDao.insertPaymentMethod(PaymentMethodEntity(name = trimmed))
+        }
+    }
+
+    suspend fun deletePaymentMethod(paymentMethod: PaymentMethodEntity) =
+        paymentMethodDao.deletePaymentMethod(paymentMethod)
+
+    suspend fun deletePaymentMethodById(id: Long) =
+        paymentMethodDao.deletePaymentMethodById(id)
     // Transactions
     val allTransactions: Flow<List<TransactionEntity>> = transactionDao.getAllTransactions()
     val pinnedTransactions: Flow<List<TransactionEntity>> = transactionDao.getPinnedTransactions()
@@ -83,6 +108,8 @@ class WalletRepository(
         }
     }
 
+    suspend fun getAllDebtsSync(): List<DebtEntity> = debtDao.getAllDebtsSync()
+
     fun getPaymentsForDebt(debtId: Long): Flow<List<DebtPaymentEntity>> =
         debtPaymentDao.getPaymentsForDebt(debtId)
 
@@ -132,8 +159,38 @@ class WalletRepository(
         }
     }
 
+    suspend fun getAllDebtPaymentsSync(): List<DebtPaymentEntity> =
+        debtPaymentDao.getAllPaymentsSync()
+
+    suspend fun insertAllTransactions(transactions: List<TransactionEntity>) =
+        transactionDao.insertAllTransactions(transactions)
+
+    suspend fun insertAllDebts(debts: List<DebtEntity>) =
+        debtDao.insertAllDebts(debts)
+
+    suspend fun insertAllDebtPayments(payments: List<DebtPaymentEntity>) =
+        debtPaymentDao.insertAllPayments(payments)
+
     suspend fun clearAllData() {
+        debtPaymentDao.deleteAllPayments()
         transactionDao.deleteAllTransactions()
         debtDao.deleteAllDebts()
+    }
+
+    suspend fun restoreAllData(
+        transactions: List<TransactionEntity>,
+        debts: List<DebtEntity>,
+        payments: List<DebtPaymentEntity>
+    ) {
+        clearAllData()
+        if (transactions.isNotEmpty()) {
+            transactionDao.insertAllTransactions(transactions)
+        }
+        if (debts.isNotEmpty()) {
+            debtDao.insertAllDebts(debts)
+        }
+        if (payments.isNotEmpty()) {
+            debtPaymentDao.insertAllPayments(payments)
+        }
     }
 }

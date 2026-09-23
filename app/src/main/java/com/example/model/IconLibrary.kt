@@ -115,7 +115,7 @@ object IconLibrary {
         // Education & Work
         IconItem("school", "مدارس وجامعات", "School & College", IconCategoryGroup.EDUCATION_WORK, Icons.Default.School),
         IconItem("book", "كتب ومراجع", "Books & Study", IconCategoryGroup.EDUCATION_WORK, Icons.Default.MenuBook),
-        IconItem("work", "وظيفة وراتب", "Job / Work", IconCategoryGroup.EDUCATION_WORK, Icons.Default.Work),
+        IconItem("work", "حقيبة عمل", "Work Briefcase", IconCategoryGroup.EDUCATION_WORK, Icons.Default.Work),
         IconItem("business", "أعمال واستشارات", "Business", IconCategoryGroup.EDUCATION_WORK, Icons.Default.BusinessCenter),
         IconItem("laptop", "عمل عن بعد وحاسوب", "Laptop / Remote", IconCategoryGroup.EDUCATION_WORK, Icons.Default.Laptop),
         IconItem("calc", "حسابات وضرائب", "Calculations", IconCategoryGroup.EDUCATION_WORK, Icons.Default.Calculate),

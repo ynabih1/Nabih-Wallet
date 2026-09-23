@@ -59,7 +59,6 @@ import com.example.ui.theme.TextSecondaryBrown
 import com.example.ui.theme.WarmBackground
 import com.example.ui.theme.WarmCardSurface
 
-@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun BudgetSettingDialog(
     currentBudget: Double,
@@ -74,8 +73,6 @@ fun BudgetSettingDialog(
     }
     var errorMessage by remember { mutableStateOf<String?>(null) }
     val focusManager = LocalFocusManager.current
-
-    val quickPresets = listOf(500.0, 1000.0, 2000.0, 3000.0, 5000.0, 10000.0)
 
     Dialog(
         onDismissRequest = onDismiss,
@@ -160,7 +157,7 @@ fun BudgetSettingDialog(
                     },
                     placeholder = {
                         Text(
-                            text = if (isArabic) "مثال: 3000" else "e.g. 3000",
+                            text = "3000",
                             color = TextSecondaryBrown.copy(alpha = 0.6f)
                         )
                     },
@@ -194,47 +191,6 @@ fun BudgetSettingDialog(
                         .fillMaxWidth()
                         .testTag("budget_amount_input")
                 )
-
-                Spacer(modifier = Modifier.height(14.dp))
-
-                // Quick presets (خيارات سريعة)
-                Text(
-                    text = if (isArabic) "خيارات سريعة" else "Quick options",
-                    style = MaterialTheme.typography.labelSmall,
-                    fontWeight = FontWeight.SemiBold,
-                    color = TextSecondaryBrown
-                )
-                Spacer(modifier = Modifier.height(8.dp))
-
-                FlowRow(
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp),
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    quickPresets.forEach { preset ->
-                        val isSelected = amountText.toDoubleOrNull() == preset
-                        Surface(
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(10.dp))
-                                .clickable {
-                                    amountText = String.format(java.util.Locale.US, "%.0f", preset)
-                                    errorMessage = null
-                                }
-                                .testTag("budget_preset_${preset.toInt()}"),
-                            color = if (isSelected) BurntOrangePrimary else WarmBackground,
-                            shape = RoundedCornerShape(10.dp),
-                            border = BorderStroke(1.dp, if (isSelected) BurntOrangePrimary else BorderSubtle)
-                        ) {
-                            Text(
-                                text = "${Formatters.formatMoney(preset)} $currencySymbol".trim(),
-                                style = MaterialTheme.typography.labelMedium,
-                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
-                                color = if (isSelected) Color.White else TextPrimaryDark,
-                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp)
-                            )
-                        }
-                    }
-                }
 
                 Spacer(modifier = Modifier.height(20.dp))
 

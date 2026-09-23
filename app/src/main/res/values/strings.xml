@@ -42,31 +42,6 @@
     <string name="delete">حذف</string>
     <string name="confirm_delete">هل أنت متأكد من الحذف؟</string>
 
-    <!-- Categories - Expense -->
-    <string name="cat_living">مصروفات المعيشة</string>
-    <string name="cat_study">مصروفات الدراسة</string>
-    <string name="cat_food">طعام ومشروبات</string>
-    <string name="cat_transport">مواصلات</string>
-    <string name="cat_bills">فواتير وخدمات</string>
-    <string name="cat_shopping">تسوق</string>
-    <string name="cat_health">صحة وطب</string>
-    <string name="cat_entertainment">ترفيه</string>
-    <string name="cat_other_expense">أخرى</string>
-
-    <!-- Categories - Income -->
-    <string name="cat_salary">راتب شهري</string>
-    <string name="cat_freelance">عمل حر</string>
-    <string name="cat_investment">استثمار وأرباح</string>
-    <string name="cat_bonus">مكافأة</string>
-    <string name="cat_gift">هدية</string>
-    <string name="cat_other_income">أخرى</string>
-
-    <!-- Payment Methods -->
-    <string name="pay_cash">نقداً</string>
-    <string name="pay_card">بطاقة بنكية</string>
-    <string name="pay_wallet">محفظة إلكترونية</string>
-    <string name="pay_transfer">تحويل بنكي</string>
-
     <!-- Debts & Loans -->
     <string name="debts_title">سجل الديون</string>
     <string name="filter_all">الكل</string>
@@ -120,6 +95,9 @@
 
     <!-- Settings -->
     <string name="settings_title">الإعدادات</string>
+    <string name="pin_lock">قفل التطبيق برمز PIN</string>
+    <string name="pin_lock_desc">تأمين فتح المحفظة برمز PIN مكوّن من 4 أرقام</string>
+    <string name="security_privacy">الأمان والخصوصية</string>
     <string name="language">اللغة</string>
     <string name="theme">المظهر</string>
     <string name="theme_light">فاتح</string>
@@ -170,7 +148,7 @@
     <string name="budget_exceeded_by">تجاوزت الميزانية بمقدار</string>
     <string name="budget_not_set">غير محددة</string>
     <string name="budget_alert_toggle">تنبيه عند اقتراب المصروفات من 80% من الميزانية</string>
-    <string name="budget_alert_warning">⚠️ اقتربت من استهلاك الميزانية الشهرية (تم استهلاك %1$d%%)</string>
+    <string name="budget_alert_warning">⚠️ اقتربت من استهلاك الميزانية الشهرية - تم استهلاك %1$d%%</string>
     <string name="budget_alert_exceeded">🚨 تحذير: لقد تجاوزت الميزانية الشهرية المحددة!</string>
     <string name="budget_saved_success">تم حفظ الميزانية الشهرية بنجاح</string>
     <string name="budget_cleared_success">تم إلغاء الميزانية الشهرية</string>

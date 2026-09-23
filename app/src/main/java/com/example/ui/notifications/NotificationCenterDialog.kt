@@ -201,7 +201,7 @@ fun NotificationCenterDialog(
                         onClick = { selectedTabIndex = 0 },
                         text = {
                             Text(
-                                text = if (isArabic) "التنبيهات الذكية (${notifications.size})" else "Smart Alerts (${notifications.size})",
+                                text = if (isArabic) "التنبيهات الذكية" else "Smart Alerts",
                                 fontWeight = if (selectedTabIndex == 0) FontWeight.Bold else FontWeight.Normal,
                                 color = if (selectedTabIndex == 0) BurntOrangePrimary else TextSecondaryBrown,
                                 fontSize = 13.sp
@@ -355,7 +355,7 @@ fun NotificationCenterDialog(
                         AnimatedVisibility(visible = isNotificationsEnabled) {
                             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                                 NotificationPreferenceRow(
-                                    title = if (isArabic) "تنبيهات الميزانية (80% وتجاوز الحد)" else "Budget Alerts (80% & Exceeded)",
+                                    title = if (isArabic) "تنبيهات الميزانية" else "Budget Alerts",
                                     subtitle = if (isArabic) "إشعار فوري عند الاقتراب من السقف الشهري" else "Instant alert when near or exceeding budget",
                                     checked = isBudgetAlertEnabled,
                                     onCheckedChange = onToggleBudgetAlerts,

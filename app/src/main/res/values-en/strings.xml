@@ -42,31 +42,6 @@
     <string name="delete">Delete</string>
     <string name="confirm_delete">Are you sure you want to delete?</string>
 
-    <!-- Categories - Expense -->
-    <string name="cat_living">Living Expenses</string>
-    <string name="cat_study">Education</string>
-    <string name="cat_food">Food &amp; Drinks</string>
-    <string name="cat_transport">Transport</string>
-    <string name="cat_bills">Bills &amp; Utilities</string>
-    <string name="cat_shopping">Shopping</string>
-    <string name="cat_health">Health &amp; Medical</string>
-    <string name="cat_entertainment">Entertainment</string>
-    <string name="cat_other_expense">Other</string>
-
-    <!-- Categories - Income -->
-    <string name="cat_salary">Salary</string>
-    <string name="cat_freelance">Freelance</string>
-    <string name="cat_investment">Investment</string>
-    <string name="cat_bonus">Bonus</string>
-    <string name="cat_gift">Gift</string>
-    <string name="cat_other_income">Other</string>
-
-    <!-- Payment Methods -->
-    <string name="pay_cash">Cash</string>
-    <string name="pay_card">Bank Card</string>
-    <string name="pay_wallet">E-Wallet</string>
-    <string name="pay_transfer">Bank Transfer</string>
-
     <!-- Debts & Loans -->
     <string name="debts_title">Debts Record</string>
     <string name="filter_all">All</string>
@@ -120,6 +95,9 @@
 
     <!-- Settings -->
     <string name="settings_title">Settings</string>
+    <string name="pin_lock">PIN App Lock</string>
+    <string name="pin_lock_desc">Secure wallet access with a 4-digit PIN code</string>
+    <string name="security_privacy">Security &amp; Privacy</string>
     <string name="language">Language</string>
     <string name="theme">Appearance</string>
     <string name="theme_light">Light</string>

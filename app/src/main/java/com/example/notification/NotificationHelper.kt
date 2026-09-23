@@ -18,11 +18,13 @@ object NotificationHelper {
     const val CHANNEL_BUDGET = "channel_budget_alerts"
     const val CHANNEL_DEBTS = "channel_debt_reminders"
     const val CHANNEL_DAILY = "channel_daily_reminders"
+    const val CHANNEL_BACKUP = "channel_backup_reminders"
 
     private const val NOTIFICATION_ID_BUDGET = 1001
     private const val NOTIFICATION_ID_DEBT = 1002
     private const val NOTIFICATION_ID_DAILY = 1003
     private const val NOTIFICATION_ID_TEST = 1004
+    private const val NOTIFICATION_ID_BACKUP = 1005
 
     fun createNotificationChannels(context: Context) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
@@ -30,7 +32,7 @@ object NotificationHelper {
 
             val budgetChannel = NotificationChannel(
                 CHANNEL_BUDGET,
-                "تنبيهات الميزانية (Budget Alerts)",
+                "تنبيهات الميزانية",
                 NotificationManager.IMPORTANCE_HIGH
             ).apply {
                 description = "تنبيهات عند اقتراب أو تجاوز سقف الميزانية الشهرية"
@@ -39,7 +41,7 @@ object NotificationHelper {
 
             val debtChannel = NotificationChannel(
                 CHANNEL_DEBTS,
-                "تذكيرات الديون (Debt Reminders)",
+                "تذكيرات الديون",
                 NotificationManager.IMPORTANCE_DEFAULT
             ).apply {
                 description = "تذكيرات بمتابعة الديون المستحقة لك وعليك"
@@ -47,13 +49,21 @@ object NotificationHelper {
 
             val dailyChannel = NotificationChannel(
                 CHANNEL_DAILY,
-                "تذكير التسجيل اليومي (Daily Reminder)",
+                "تذكير التسجيل اليومي",
                 NotificationManager.IMPORTANCE_DEFAULT
             ).apply {
                 description = "تذكيرات لتسجيل المصروفات اليومية"
             }
 
-            notificationManager.createNotificationChannels(listOf(budgetChannel, debtChannel, dailyChannel))
+            val backupChannel = NotificationChannel(
+                CHANNEL_BACKUP,
+                "تذكير النسخ الاحتياطي",
+                NotificationManager.IMPORTANCE_DEFAULT
+            ).apply {
+                description = "تذكير دوري بحفظ نسخة احتياطية من بياناتك"
+            }
+
+            notificationManager.createNotificationChannels(listOf(budgetChannel, debtChannel, dailyChannel, backupChannel))
         }
     }
 
@@ -119,6 +129,16 @@ object NotificationHelper {
 
     fun sendDailyReminder(context: Context, title: String, message: String): Boolean {
         return sendNotification(context, CHANNEL_DAILY, NOTIFICATION_ID_DAILY, title, message)
+    }
+
+    fun sendBackupReminder(context: Context, isArabic: Boolean): Boolean {
+        val title = if (isArabic) "محفظة نبيه - تذكير بالنسخ الاحتياطي" else "Nabih Wallet - Backup Reminder"
+        val msg = if (isArabic) {
+            "حان موعد إنشاء نسخة احتياطية من معاملاتك وديونك لحماية بياناتك من الضياع."
+        } else {
+            "Time to create a backup of your transactions and debts to keep your data safe."
+        }
+        return sendNotification(context, CHANNEL_BACKUP, NOTIFICATION_ID_BACKUP, title, msg)
     }
 
     fun sendTestNotification(context: Context, isArabic: Boolean): Boolean {

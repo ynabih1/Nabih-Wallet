@@ -22,6 +22,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.Handshake
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Payment
 import androidx.compose.material3.AlertDialog
@@ -62,6 +63,7 @@ import com.example.model.DebtWithPayments
 import com.example.model.DueStatus
 import com.example.ui.DebtFilter
 import com.example.ui.WalletViewModel
+import com.example.ui.components.EmptyStateView
 import com.example.ui.components.Formatters
 import com.example.ui.theme.BorderSubtle
 import com.example.ui.theme.BurntOrangePrimary
@@ -232,25 +234,12 @@ fun DebtsScreen(
         // 4. Debts List
         if (filteredDebts.isEmpty()) {
             item {
-                Surface(
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(16.dp),
-                    color = WarmCardSurface,
-                    border = androidx.compose.foundation.BorderStroke(1.dp, BorderSubtle)
-                ) {
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(32.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally
-                    ) {
-                        Text(
-                            text = stringResource(R.string.no_debts_yet),
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = TextSecondaryBrown
-                        )
-                    }
-                }
+                EmptyStateView(
+                    icon = Icons.Default.Handshake,
+                    title = stringResource(R.string.no_debts_yet),
+                    description = if (isArabic) "لا توجد ديون أو مستحقات مالية مسجلة في هذا القسم" else "No debts or receivables recorded in this section",
+                    modifier = Modifier.fillMaxWidth()
+                )
             }
         } else {
             items(filteredDebts, key = { it.debt.id }) { debtItem ->

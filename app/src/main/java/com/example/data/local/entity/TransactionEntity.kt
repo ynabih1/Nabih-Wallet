@@ -12,6 +12,7 @@ data class TransactionEntity(
     val category: String,
     val paymentMethod: String,
     val dateMillis: Long = System.currentTimeMillis(),
+    val endDateMillis: Long? = null,
     val notes: String = "",
     val isPinned: Boolean = false,
     val receiptUri: String? = null,
