@@ -1,0 +1,180 @@
+<resources>
+    <string name="app_name">Nabih Wallet</string>
+    <string name="app_tagline">إدارة المصاريف والديون</string>
+
+    <!-- Navigation -->
+    <string name="nav_home">الرئيسية</string>
+    <string name="nav_reports">التقارير</string>
+    <string name="nav_debts">الديون</string>
+    <string name="nav_settings">الإعدادات</string>
+    <string name="nav_add">إضافة</string>
+
+    <!-- Home & Balance -->
+    <string name="total_balance">الرصيد</string>
+    <string name="income">الدخل</string>
+    <string name="expense">المصروف</string>
+    <string name="owed_to_me">مستحق لي</string>
+    <string name="i_owe">مستحق علي</string>
+    <string name="net_debt_balance">صافي الديون</string>
+    <string name="recent_transactions">العمليات الأخيرة</string>
+    <string name="see_all">الكل</string>
+    <string name="no_transactions_yet">لا توجد عمليات</string>
+    <string name="add_first_transaction">اضغط + للإضافة</string>
+
+    <!-- Transactions -->
+    <string name="add_transaction">إضافة عملية</string>
+    <string name="edit_transaction">تعديل العملية</string>
+    <string name="delete_transaction">حذف العملية</string>
+    <string name="transaction_type">النوع</string>
+    <string name="amount">المبلغ</string>
+    <string name="category">الفئة</string>
+    <string name="payment_method">الدفع</string>
+    <string name="date">التاريخ</string>
+    <string name="notes">ملاحظات</string>
+    <string name="notes_hint">ملاحظة...</string>
+    <string name="pin_transaction">تثبيت</string>
+    <string name="attach_receipt">إرفاق فاتورة</string>
+    <string name="receipt_attached">تم الإرفاق</string>
+    <string name="remove_receipt">حذف الفاتورة</string>
+    <string name="view_receipt">عرض الفاتورة</string>
+    <string name="save">حفظ</string>
+    <string name="cancel">إلغاء</string>
+    <string name="delete">حذف</string>
+    <string name="confirm_delete">تأكيد الحذف؟</string>
+
+    <!-- Debts & Loans -->
+    <string name="debts_title">الديون</string>
+    <string name="filter_all">الكل</string>
+    <string name="filter_owed_to_me">مستحق لي</string>
+    <string name="filter_i_owe">مستحق علي</string>
+    <string name="add_debt">إضافة دين</string>
+    <string name="edit_debt">تعديل</string>
+    <string name="delete_debt">حذف</string>
+    <string name="debt_type">النوع</string>
+    <string name="person_name">الاسم</string>
+    <string name="person_name_hint">الاسم...</string>
+    <string name="total_amount">الإجمالي</string>
+    <string name="lent_date">تاريخ البدء</string>
+    <string name="due_date">تاريخ السداد</string>
+    <string name="no_due_date">بدون أجل</string>
+    <string name="due_in_days">خلال %1$d يوم</string>
+    <string name="overdue_days">متأخر %1$d يوم</string>
+    <string name="due_today">اليوم</string>
+    <string name="repaid_of">سُدد %1$s من %2$s</string>
+    <string name="remaining">المتبقي: %1$s</string>
+    <string name="status_unpaid">غير مسدد</string>
+    <string name="status_partially_paid">مسدد جزئياً</string>
+    <string name="status_fully_paid">مسدد بالكامل</string>
+    <string name="log_repayment">تسجيل سداد</string>
+    <string name="repayment_history">السجل</string>
+    <string name="no_payments_yet">لا توجد دفعات</string>
+    <string name="repayment_amount">مبلغ السداد</string>
+    <string name="enable_due_reminder">تذكير قبل السداد</string>
+    <string name="no_debts_yet">لا توجد ديون</string>
+
+    <!-- PDF & Reports -->
+    <string name="reports_title">التقارير</string>
+    <string name="report_comprehensive_title">تقرير شامل</string>
+    <string name="report_expense_title">تقرير العمليات</string>
+    <string name="report_debts_title">تقرير الديون</string>
+    <string name="export_pdf">تصدير PDF</string>
+    <string name="share_pdf">مشاركة</string>
+    <string name="select_period">الفترة</string>
+    <string name="period_all">الكل</string>
+    <string name="period_this_month">هذا الشهر</string>
+    <string name="period_last_month">الشهر الماضي</string>
+    <string name="pdf_exported_success">تم التصدير بنجاح</string>
+    <string name="pdf_export_failed">فشل التصدير</string>
+    <string name="generating_pdf">جاري التصدير...</string>
+    <string name="report_summary">الملخص</string>
+    <string name="monthly_average">المعدل الشهري</string>
+    <string name="highest_category">أعلى فئة</string>
+    <string name="lowest_category">أقل فئة</string>
+    <string name="items_count">العدد</string>
+    <string name="issue_date">التاريخ</string>
+
+    <!-- Settings -->
+    <string name="settings_title">الإعدادات</string>
+    <string name="pin_lock">رمز PIN</string>
+    <string name="pin_lock_desc">قفل برمز 4 أرقام</string>
+    <string name="security_privacy">الأمان</string>
+    <string name="language">اللغة</string>
+    <string name="theme">المظهر</string>
+    <string name="theme_light">فاتح</string>
+    <string name="theme_dark">داكن</string>
+    <string name="theme_system">تلقائي</string>
+    <string name="currency">العملة</string>
+    <string name="currency_egp">جنيه مصري</string>
+    <string name="currency_sar">ريال سعودي</string>
+    <string name="currency_usd">دولار أمريكي</string>
+    <string name="currency_eur">يورو</string>
+    <string name="currency_symbol_egp">جنيه</string>
+    <string name="notifications">الإشعارات</string>
+    <string name="about_app">عن التطبيق</string>
+    <string name="app_version">الإصدار 1.0.0</string>
+    <string name="clear_data">مسح البيانات</string>
+
+    <!-- Categories Customization -->
+    <string name="categories_management">إدارة الفئات</string>
+    <string name="categories_management_desc">تخصيص الفئات والأيقونات</string>
+    <string name="choose_icon">الأيقونة</string>
+    <string name="icon_library">المكتبة</string>
+    <string name="change_icon">تغيير</string>
+    <string name="reset_icons">استعادة الافتراضي</string>
+    <string name="custom_category">فئة مخصصة</string>
+    <string name="add_custom_category">فئة جديدة</string>
+    <string name="category_name">اسم الفئة</string>
+    <string name="category_type">النوع</string>
+    <string name="select_icon">اختر أيقونة</string>
+    <string name="search_icons">بحث...</string>
+    <string name="all_icons">الكل</string>
+    <string name="filter_expenses">المصروفات</string>
+    <string name="filter_income">الإيرادات</string>
+    <string name="icon_changed_success">تم التحديث</string>
+    <string name="lang_arabic">العربية</string>
+    <string name="lang_english">English</string>
+    <string name="lang_desc_ar">الواجهة العربية</string>
+    <string name="lang_desc_en">English</string>
+
+    <!-- Monthly Budget & Alerts -->
+    <string name="monthly_budget">الميزانية الشهرية</string>
+    <string name="monthly_budget_desc">سقف الإنفاق والتنبيهات</string>
+    <string name="set_monthly_budget">تحديد الميزانية</string>
+    <string name="edit_monthly_budget">تعديل الميزانية</string>
+    <string name="clear_monthly_budget">حذف الميزانية</string>
+    <string name="budget_amount_hint">المبلغ الشهري...</string>
+    <string name="budget_spent">المصروف</string>
+    <string name="budget_remaining">المتبقي</string>
+    <string name="budget_exceeded_by">تجاوز بـ</string>
+    <string name="budget_not_set">غير محددة</string>
+    <string name="budget_alert_toggle">تنبيه عند 80%</string>
+    <string name="budget_alert_warning">⚠️ استهلاك %1$d%% من الميزانية</string>
+    <string name="budget_alert_exceeded">🚨 تجاوزت الميزانية!</string>
+    <string name="budget_saved_success">تم الحفظ</string>
+    <string name="budget_cleared_success">تم الحذف</string>
+
+    <!-- Notifications -->
+    <string name="notifications_title">الإشعارات</string>
+    <string name="notifications_desc">التنبيهات وتذكيرات السداد</string>
+    <string name="notification_center">الإشعارات</string>
+    <string name="enable_notifications">تفعيل الإشعارات</string>
+    <string name="budget_alerts">تنبيهات الميزانية</string>
+    <string name="budget_alerts_desc">تنبيه عند 80% أو التجاوز</string>
+    <string name="debt_reminders">تذكيرات الديون</string>
+    <string name="debt_reminders_desc">تذكير بمواعيد السداد</string>
+    <string name="daily_reminders">التذكير اليومي</string>
+    <string name="daily_reminders_desc">تذكير مسائي بالتسجيل</string>
+    <string name="send_test_notification">إشعار تجريبي</string>
+    <string name="test_notification_sent">تم الإرسال</string>
+    <string name="notifications_permission_denied">يرجى تفعيل إذن الإشعارات</string>
+    <string name="no_notifications_yet">لا توجد إشعارات</string>
+    <string name="no_notifications_desc">ستظهر هنا التنبيهات</string>
+    <string name="smart_alerts">تنبيهات ذكية</string>
+    <string name="notification_settings">إعدادات الإشعارات</string>
+
+    <!-- Validation -->
+    <string name="error_invalid_amount">حدد المبلغ</string>
+    <string name="error_empty_name">أدخل الاسم</string>
+    <string name="error_empty_category">اختر الفئة</string>
+    <string name="error_repayment_exceeds">المبلغ يتجاوز المتبقي</string>
+</resources>
