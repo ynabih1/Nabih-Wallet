@@ -1,64 +1,36 @@
 <?xml version="1.0" encoding="utf-8"?>
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
-    xmlns:aapt="http://schemas.android.com/aapt"
     android:width="108dp"
     android:height="108dp"
     android:viewportWidth="108"
     android:viewportHeight="108">
 
-    <!-- Base Diagonal Gradient: Deep Warm Olive-Charcoal -->
-    <path android:pathData="M0,0h108v108h-108z">
-        <aapt:attr name="android:fillColor">
-            <gradient
-                android:startX="0"
-                android:startY="0"
-                android:endX="108"
-                android:endY="108"
-                android:type="linear">
-                <item
-                    android:color="#383C2E"
-                    android:offset="0.0" />
-                <item
-                    android:color="#2A2D22"
-                    android:offset="0.52" />
-                <item
-                    android:color="#1B1D15"
-                    android:offset="1.0" />
-            </gradient>
-        </aapt:attr>
-    </path>
+    <!-- Base Warm Espresso Background -->
+    <path
+        android:fillColor="#231712"
+        android:pathData="M0,0h108v108h-108z" />
 
-    <!-- Warm Terracotta-Gold Radial Ambient Glow in Center -->
-    <path android:pathData="M0,0h108v108h-108z">
-        <aapt:attr name="android:fillColor">
-            <gradient
-                android:centerX="50"
-                android:centerY="46"
-                android:gradientRadius="52"
-                android:type="radial">
-                <item
-                    android:color="#33D96B43"
-                    android:offset="0.0" />
-                <item
-                    android:color="#14D96B43"
-                    android:offset="0.55" />
-                <item
-                    android:color="#001B1D15"
-                    android:offset="1.0" />
-            </gradient>
-        </aapt:attr>
-    </path>
+    <!-- Subtle Top-Left Warm Highlight Layer -->
+    <path
+        android:fillColor="#184D3024"
+        android:pathData="M0,0 L108,0 L0,108 Z" />
 
-    <!-- Subtle Decorative Geometric Halo Rings -->
+    <!-- Subtle Center Warm Glow -->
+    <path
+        android:fillColor="#1F3E271E"
+        android:pathData="M54,54m-42,0a42,42 0,1 1,84 0a42,42 0,1 1,-84 0" />
+
+    <!-- Subtle Outer Decorative Ring -->
     <path
         android:fillColor="#00000000"
-        android:pathData="M54,54m-42,0a42,42 0,1 1,84 0a42,42 0,1 1,-84 0"
+        android:strokeColor="#12FFF7E8"
         android:strokeWidth="0.75"
-        android:strokeColor="#12FFF7E8" />
+        android:pathData="M54,54m-42,0a42,42 0,1 1,84 0a42,42 0,1 1,-84 0" />
 
+    <!-- Subtle Inner Decorative Ring -->
     <path
         android:fillColor="#00000000"
-        android:pathData="M54,54m-34,0a34,34 0,1 1,68 0a34,34 0,1 1,-68 0"
+        android:strokeColor="#16D96B43"
         android:strokeWidth="0.6"
-        android:strokeColor="#16D96B43" />
+        android:pathData="M54,54m-34,0a34,34 0,1 1,68 0a34,34 0,1 1,-68 0" />
 </vector>

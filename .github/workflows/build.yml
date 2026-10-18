@@ -58,12 +58,17 @@ jobs:
       - name: Build Debug APK
         run: gradle :app:assembleDebug --stacktrace --no-daemon
 
-      - name: Verify APK Generation
+      - name: Sign APK with v1 and v2 Schemes for Android 8 Compatibility
         run: |
           if [ ! -f "app/build/outputs/apk/debug/app-debug.apk" ]; then
             echo "Error: APK file not found at expected path!"
             find app/build/outputs/ -name "*.apk" || true
             exit 1
+          fi
+          APKSIGNER=$(find "$ANDROID_HOME/build-tools" -name apksigner 2>/dev/null | sort -V | tail -n 1)
+          if [ -n "$APKSIGNER" ]; then
+            "$APKSIGNER" sign --min-sdk-version 21 --ks debug.keystore --ks-pass pass:android --key-pass pass:android --ks-key-alias androiddebugkey --v1-signing-enabled true --v2-signing-enabled true app/build/outputs/apk/debug/app-debug.apk
+            "$APKSIGNER" verify --verbose app/build/outputs/apk/debug/app-debug.apk
           fi
 
       - name: Upload Debug APK
