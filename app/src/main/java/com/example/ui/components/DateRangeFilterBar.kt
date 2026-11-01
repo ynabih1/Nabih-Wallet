@@ -298,7 +298,7 @@ fun DateRangeSelectionDialog(
                 modifier = Modifier.weight(1f),
                 title = {
                     Text(
-                        text = if (isArabic) "تحديد النطاق الزمني باليوم" else "Select Date Range (Day-by-Day)",
+                        text = if (isArabic) "تحديد النطاق الزمني باليوم" else "Select Date Range",
                         fontSize = 16.sp,
                         fontWeight = FontWeight.Bold,
                         color = TextPrimaryDark,
@@ -314,8 +314,8 @@ fun DateRangeSelectionDialog(
                         DateFilterUtils.formatDateRangeLabel(localStart, localEnd, isArabic)
                     } else if (startUtc != null) {
                         val localStart = DateFilterUtils.utcMillisToLocalStartOfDay(startUtc)
-                        if (isArabic) "من ${DateFilterUtils.formatDateArabic(localStart)} (اختر تاريخ النهاية)"
-                        else "From ${DateFilterUtils.formatDateEnglish(localStart)} (Select end date)"
+                        if (isArabic) "من ${DateFilterUtils.formatDateArabic(localStart)} - اختر تاريخ النهاية"
+                        else "From ${DateFilterUtils.formatDateEnglish(localStart)} - Select end date"
                     } else {
                         if (isArabic) "اختر تاريخ البداية وتاريخ النهاية" else "Choose start and end dates"
                     }

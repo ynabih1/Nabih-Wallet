@@ -2,9 +2,11 @@ package com.example.ui
 
 import android.app.Application
 import android.content.Context
-import android.content.Intent
+import android.net.Uri
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.data.backup.BackupManager
+import com.example.data.backup.BackupPackage
 import com.example.data.local.database.AppDatabase
 import com.example.data.local.entity.DebtEntity
 import com.example.data.local.entity.DebtPaymentEntity
@@ -14,18 +16,12 @@ import com.example.model.CategoryItem
 import com.example.model.DebtWithPayments
 import com.example.model.FinancialConstants
 import com.example.model.IconLibrary
-import com.example.model.MonthlyBudgetStatus
-import com.example.model.NotificationSeverity
-import com.example.model.SmartNotificationItem
 import com.example.model.toDebtRecord
-import com.example.notification.NotificationHelper
 import com.example.pdf.PdfExporter
-import com.example.ui.components.Formatters
-import android.net.Uri
-import com.example.data.backup.BackupManager
-import com.example.data.backup.BackupPackage
 import com.example.ui.components.DateFilterPreset
 import com.example.ui.components.DateFilterUtils
+import com.example.ui.components.MonthlyCalculationUtils
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -34,13 +30,11 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
-import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
-import java.io.File
-import java.util.Calendar
 
 sealed interface UserFeedback {
     data class Success(
@@ -79,21 +73,6 @@ class WalletViewModel(application: Application) : AndroidViewModel(application) 
     private val _themeMode = MutableStateFlow(prefs.getString("theme_mode", "LIGHT") ?: "LIGHT")
     val themeMode: StateFlow<String> = _themeMode.asStateFlow()
 
-    private val _monthlyBudget = MutableStateFlow(prefs.getFloat("monthly_budget_amount", 0f).toDouble())
-    val monthlyBudget: StateFlow<Double> = _monthlyBudget.asStateFlow()
-
-    private val _isBudgetAlertEnabled = MutableStateFlow(prefs.getBoolean("budget_alert_enabled", true))
-    val isBudgetAlertEnabled: StateFlow<Boolean> = _isBudgetAlertEnabled.asStateFlow()
-
-    private val _isNotificationsEnabled = MutableStateFlow(prefs.getBoolean("notifications_enabled", true))
-    val isNotificationsEnabled: StateFlow<Boolean> = _isNotificationsEnabled.asStateFlow()
-
-    private val _isDebtAlertEnabled = MutableStateFlow(prefs.getBoolean("debt_alert_enabled", true))
-    val isDebtAlertEnabled: StateFlow<Boolean> = _isDebtAlertEnabled.asStateFlow()
-
-    private val _isDailyReminderEnabled = MutableStateFlow(prefs.getBoolean("daily_reminder_enabled", true))
-    val isDailyReminderEnabled: StateFlow<Boolean> = _isDailyReminderEnabled.asStateFlow()
-
     fun setLanguage(lang: String) {
         _language.value = lang
         prefs.edit().putString("language", lang).apply()
@@ -108,86 +87,6 @@ class WalletViewModel(application: Application) : AndroidViewModel(application) 
     fun setThemeMode(mode: String) {
         _themeMode.value = mode
         prefs.edit().putString("theme_mode", mode).apply()
-    }
-
-    private val dispatchedNotificationSignatures = mutableMapOf<String, String>()
-
-    fun setNotificationsEnabled(enabled: Boolean) {
-        _isNotificationsEnabled.value = enabled
-        prefs.edit().putBoolean("notifications_enabled", enabled).apply()
-        val app = getApplication<Application>()
-        if (!enabled) {
-            dispatchedNotificationSignatures.keys.forEach { id ->
-                NotificationHelper.cancelSmartNotification(app, id)
-            }
-            dispatchedNotificationSignatures.clear()
-        } else {
-            dispatchedNotificationSignatures.clear()
-            syncSystemNotifications(smartNotifications.value, forceAll = true)
-        }
-    }
-
-    fun setDebtAlertEnabled(enabled: Boolean) {
-        _isDebtAlertEnabled.value = enabled
-        prefs.edit().putBoolean("debt_alert_enabled", enabled).apply()
-        if (!enabled) {
-            val app = getApplication<Application>()
-            NotificationHelper.cancelSmartNotification(app, "debts_owed_to_me")
-            NotificationHelper.cancelSmartNotification(app, "debts_i_owe")
-            dispatchedNotificationSignatures.remove("debts_owed_to_me")
-            dispatchedNotificationSignatures.remove("debts_i_owe")
-        } else {
-            dispatchedNotificationSignatures.remove("debts_owed_to_me")
-            dispatchedNotificationSignatures.remove("debts_i_owe")
-        }
-    }
-
-    fun setDailyReminderEnabled(enabled: Boolean) {
-        _isDailyReminderEnabled.value = enabled
-        prefs.edit().putBoolean("daily_reminder_enabled", enabled).apply()
-        if (!enabled) {
-            val app = getApplication<Application>()
-            NotificationHelper.cancelSmartNotification(app, "daily_logging_reminder")
-            dispatchedNotificationSignatures.remove("daily_logging_reminder")
-        } else {
-            dispatchedNotificationSignatures.remove("daily_logging_reminder")
-        }
-    }
-
-    fun onNotificationPermissionGranted() {
-        dispatchedNotificationSignatures.clear()
-        syncSystemNotifications(smartNotifications.value, forceAll = true)
-    }
-
-    fun setMonthlyBudget(amount: Double) {
-        val cleanAmount = if (amount < 0.0) 0.0 else amount
-        _monthlyBudget.value = cleanAmount
-        prefs.edit().putFloat("monthly_budget_amount", cleanAmount.toFloat()).apply()
-        viewModelScope.launch {
-            if (cleanAmount > 0.0) {
-                val msg = if (_language.value == "ar") "تم حفظ الميزانية الشهرية بنجاح" else "Monthly budget saved successfully"
-                _feedback.emit(UserFeedback.Success(msg))
-                checkAndSendBudgetAlertIfNeeded()
-            } else {
-                val msg = if (_language.value == "ar") "تم إلغاء الميزانية الشهرية" else "Monthly budget removed"
-                _feedback.emit(UserFeedback.Success(msg))
-            }
-        }
-    }
-
-    fun setBudgetAlertEnabled(enabled: Boolean) {
-        _isBudgetAlertEnabled.value = enabled
-        prefs.edit().putBoolean("budget_alert_enabled", enabled).apply()
-        if (!enabled) {
-            val app = getApplication<Application>()
-            NotificationHelper.cancelSmartNotification(app, "budget_exceeded")
-            NotificationHelper.cancelSmartNotification(app, "budget_warning")
-            dispatchedNotificationSignatures.remove("budget_exceeded")
-            dispatchedNotificationSignatures.remove("budget_warning")
-        } else {
-            dispatchedNotificationSignatures.remove("budget_exceeded")
-            dispatchedNotificationSignatures.remove("budget_warning")
-        }
     }
 
     private val _categoryIcons = MutableStateFlow<Map<String, String>>(loadCategoryIcons())
@@ -219,12 +118,6 @@ class WalletViewModel(application: Application) : AndroidViewModel(application) 
     private val _lastBackupDate = MutableStateFlow<String?>(prefs.getString("last_backup_date", null))
     val lastBackupDate: StateFlow<String?> = _lastBackupDate.asStateFlow()
 
-    private val _isBackupReminderEnabled = MutableStateFlow(prefs.getBoolean("backup_reminder_enabled", false))
-    val isBackupReminderEnabled: StateFlow<Boolean> = _isBackupReminderEnabled.asStateFlow()
-
-    private val _backupReminderFrequency = MutableStateFlow(prefs.getString("backup_reminder_freq", "WEEKLY") ?: "WEEKLY")
-    val backupReminderFrequency: StateFlow<String> = _backupReminderFrequency.asStateFlow()
-
     private val _isBackingUp = MutableStateFlow(false)
     val isBackingUp: StateFlow<Boolean> = _isBackingUp.asStateFlow()
 
@@ -244,19 +137,6 @@ class WalletViewModel(application: Application) : AndroidViewModel(application) 
         _filterPreset.value = preset
     }
 
-    fun setBackupReminderEnabled(enabled: Boolean) {
-        _isBackupReminderEnabled.value = enabled
-        prefs.edit().putBoolean("backup_reminder_enabled", enabled).apply()
-        if (enabled) {
-            NotificationHelper.sendBackupReminder(getApplication(), _language.value == "ar")
-        }
-    }
-
-    fun setBackupReminderFrequency(freq: String) {
-        _backupReminderFrequency.value = freq
-        prefs.edit().putString("backup_reminder_freq", freq).apply()
-    }
-
     val allTransactions: StateFlow<List<TransactionEntity>> = repository.allTransactions
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
@@ -265,7 +145,9 @@ class WalletViewModel(application: Application) : AndroidViewModel(application) 
         filterStartDate,
         filterEndDate
     ) { list, start, end ->
-        list.filter { it.dateMillis in start..end }
+        list.filter { tx ->
+            tx.dateMillis in start..end
+        }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     val recentTransactions: StateFlow<List<TransactionEntity>> = repository.recentTransactions
@@ -309,296 +191,78 @@ class WalletViewModel(application: Application) : AndroidViewModel(application) 
         owed - owe
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0.0)
 
-    val currentMonthExpenses: StateFlow<Double> = allTransactions.map { list ->
-        val cal = Calendar.getInstance()
-        val currentMonth = cal.get(Calendar.MONTH)
-        val currentYear = cal.get(Calendar.YEAR)
-        list.filter { tx ->
-            if (tx.type != "EXPENSE") return@filter false
-            val txCal = Calendar.getInstance().apply { timeInMillis = tx.dateMillis }
-            txCal.get(Calendar.MONTH) == currentMonth && txCal.get(Calendar.YEAR) == currentYear
-        }.sumOf { it.amount }
-    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0.0)
-
-    val monthlyBudgetStatus: StateFlow<MonthlyBudgetStatus> = combine(
-        monthlyBudget,
-        currentMonthExpenses,
-        isBudgetAlertEnabled
-    ) { budget, spent, alertsEnabled ->
-        if (budget <= 0.0) {
-            MonthlyBudgetStatus(
-                budgetAmount = 0.0,
-                spentAmount = spent,
-                remainingAmount = 0.0,
-                percentage = 0f,
-                isWarning = false,
-                isExceeded = false,
-                isSet = false,
-                isAlertEnabled = alertsEnabled
-            )
-        } else {
-            val remaining = (budget - spent).coerceAtLeast(0.0)
-            val pct = (spent / budget).toFloat()
-            val isExceeded = spent >= budget
-            val isWarning = !isExceeded && pct >= 0.80f
-            MonthlyBudgetStatus(
-                budgetAmount = budget,
-                spentAmount = spent,
-                remainingAmount = remaining,
-                percentage = pct,
-                isWarning = isWarning,
-                isExceeded = isExceeded,
-                isSet = true,
-                isAlertEnabled = alertsEnabled
-            )
-        }
-    }.stateIn(viewModelScope, SharingStarted.Eagerly, MonthlyBudgetStatus())
-
-    val smartNotifications: StateFlow<List<SmartNotificationItem>> = combine(
-        monthlyBudgetStatus,
-        allDebtsWithPayments,
-        allTransactions,
-        isNotificationsEnabled,
-        isBudgetAlertEnabled,
-        isDebtAlertEnabled,
-        isDailyReminderEnabled
-    ) { args: Array<Any> ->
-        val budgetStatus = args[0] as MonthlyBudgetStatus
-        @Suppress("UNCHECKED_CAST")
-        val debts = args[1] as List<DebtWithPayments>
-        @Suppress("UNCHECKED_CAST")
-        val transactions = args[2] as List<TransactionEntity>
-        val notificationsOn = args[3] as Boolean
-        val budgetAlertsOn = args[4] as Boolean
-        val debtAlertsOn = args[5] as Boolean
-        val dailyReminderOn = args[6] as Boolean
-
-        if (!notificationsOn) {
-            emptyList()
-        } else {
-            val list = mutableListOf<SmartNotificationItem>()
-
-            // 1. Budget Notifications
-            if (budgetAlertsOn && budgetStatus.isSet) {
-                val spentPct = (budgetStatus.percentage * 100).toInt()
-                if (budgetStatus.isExceeded) {
-                    val exceeded = budgetStatus.spentAmount - budgetStatus.budgetAmount
-                    list.add(
-                        SmartNotificationItem(
-                            id = "budget_exceeded",
-                            titleAr = "🚨 تجاوزت الميزانية الشهرية",
-                            titleEn = "🚨 Monthly Budget Exceeded",
-                            messageAr = "لقد تجاوزت ميزانيتك المحددة بمقدار ${Formatters.formatMoney(exceeded)}. يرجى مراجعة المصروفات.",
-                            messageEn = "You exceeded your set budget by ${Formatters.formatMoney(exceeded)}. Please review spending.",
-                            severity = NotificationSeverity.ALERT,
-                            type = "BUDGET"
-                        )
-                    )
-                } else if (budgetStatus.isWarning) {
-                    list.add(
-                        SmartNotificationItem(
-                            id = "budget_warning",
-                            titleAr = "⚠️ اقتراب من سقف الميزانية",
-                            titleEn = "⚠️ Approaching Budget Limit",
-                            messageAr = "تم استهلاك $spentPct% من ميزانيتك الشهرية. المتبقي: ${Formatters.formatMoney(budgetStatus.remainingAmount)}.",
-                            messageEn = "You have spent $spentPct% of your monthly budget. Remaining: ${Formatters.formatMoney(budgetStatus.remainingAmount)}.",
-                            severity = NotificationSeverity.WARNING,
-                            type = "BUDGET"
-                        )
-                    )
-                }
-            }
-
-            // 2. Debts Notifications
-            if (debtAlertsOn) {
-                val pendingOwedToMe = debts.filter { it.debt.type == "OWED_TO_ME" && it.debt.status != "FULLY_PAID" }
-                val pendingIOwe = debts.filter { it.debt.type == "I_OWE" && it.debt.status != "FULLY_PAID" }
-
-                val totalOwedToMeRemaining = pendingOwedToMe.sumOf { (it.debt.totalAmount - it.payments.sumOf { p -> p.amount }).coerceAtLeast(0.0) }
-                val totalIOweRemaining = pendingIOwe.sumOf { (it.debt.totalAmount - it.payments.sumOf { p -> p.amount }).coerceAtLeast(0.0) }
-
-                if (pendingOwedToMe.isNotEmpty() && totalOwedToMeRemaining > 0) {
-                    list.add(
-                        SmartNotificationItem(
-                            id = "debts_owed_to_me",
-                            titleAr = "💰 ديون مستحقة لك",
-                            titleEn = "💰 Debts Owed to You",
-                            messageAr = "لديك ${pendingOwedToMe.size} ديون مستحقة للتحصيل بإجمالي ${Formatters.formatMoney(totalOwedToMeRemaining)}.",
-                            messageEn = "You have ${pendingOwedToMe.size} pending receivables totaling ${Formatters.formatMoney(totalOwedToMeRemaining)}.",
-                            severity = NotificationSeverity.INFO,
-                            type = "DEBT"
-                        )
-                    )
-                }
-
-                if (pendingIOwe.isNotEmpty() && totalIOweRemaining > 0) {
-                    list.add(
-                        SmartNotificationItem(
-                            id = "debts_i_owe",
-                            titleAr = "🤝 ديون مستحقة عليك",
-                            titleEn = "🤝 Debts You Owe",
-                            messageAr = "لديك ${pendingIOwe.size} ديون يتوجب سدادها بإجمالي ${Formatters.formatMoney(totalIOweRemaining)}.",
-                            messageEn = "You have ${pendingIOwe.size} debts to settle totaling ${Formatters.formatMoney(totalIOweRemaining)}.",
-                            severity = NotificationSeverity.WARNING,
-                            type = "DEBT"
-                        )
-                    )
-                }
-            }
-
-            // 3. Daily Reminder Notification
-            if (dailyReminderOn) {
-                val cal = Calendar.getInstance()
-                val currentDay = cal.get(Calendar.DAY_OF_YEAR)
-                val currentYear = cal.get(Calendar.YEAR)
-                val hasLoggedToday = transactions.any { tx ->
-                    val txCal = Calendar.getInstance().apply { timeInMillis = tx.dateMillis }
-                    txCal.get(Calendar.DAY_OF_YEAR) == currentDay && txCal.get(Calendar.YEAR) == currentYear
-                }
-
-                if (!hasLoggedToday) {
-                    list.add(
-                        SmartNotificationItem(
-                            id = "daily_logging_reminder",
-                            titleAr = "📝 تذكير بتسجيل المصروفات اليومية",
-                            titleEn = "📝 Daily Expense Log Reminder",
-                            messageAr = "لم تقم بتسجيل أي عملية مالية اليوم بعد. سجّل مشترياتك أولاً بأول للحفاظ على دقة محفظتك!",
-                            messageEn = "You haven't logged any transactions today. Keep your wallet up to date!",
-                            severity = NotificationSeverity.INFO,
-                            type = "DAILY"
-                        )
-                    )
-                }
-            }
-
-            // 4. Highest Category Expense Insight
-            val cal = Calendar.getInstance()
-            val currentMonth = cal.get(Calendar.MONTH)
-            val currentYear = cal.get(Calendar.YEAR)
-            val thisMonthExpenses = transactions.filter { tx ->
-                if (tx.type != "EXPENSE") return@filter false
-                val txCal = Calendar.getInstance().apply { timeInMillis = tx.dateMillis }
-                txCal.get(Calendar.MONTH) == currentMonth && txCal.get(Calendar.YEAR) == currentYear
-            }
-
-            if (thisMonthExpenses.isNotEmpty()) {
-                val categoryGroups = thisMonthExpenses.groupBy { it.category }
-                val topCategoryEntry = categoryGroups.maxByOrNull { entry -> entry.value.sumOf { it.amount } }
-                if (topCategoryEntry != null) {
-                    val topAmount = topCategoryEntry.value.sumOf { it.amount }
-                    val totalMonth = thisMonthExpenses.sumOf { it.amount }
-                    if (totalMonth > 0 && (topAmount / totalMonth) >= 0.35 && totalMonth >= 100) {
-                        val pct = ((topAmount / totalMonth) * 100).toInt()
-                        list.add(
-                            SmartNotificationItem(
-                                id = "top_category_insight",
-                                titleAr = "📊 رؤية ذكية: أعلى فئة إنفاق",
-                                titleEn = "📊 Smart Insight: Top Category",
-                                messageAr = "فئة ${topCategoryEntry.key} تشكل $pct% من إجمالي مصروفاتك لهذا الشهر بمبلغ ${Formatters.formatMoney(topAmount)}.",
-                                messageEn = "Category ${topCategoryEntry.key} represents $pct% of your expenses this month with amount ${Formatters.formatMoney(topAmount)}.",
-                                severity = NotificationSeverity.INFO,
-                                type = "CATEGORY"
-                            )
-                        )
-                    }
-                }
-            }
-
-            list
-        }
-    }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
-
-    val unreadNotificationCount: StateFlow<Int> = smartNotifications.map { it.size }
-        .stateIn(viewModelScope, SharingStarted.Eagerly, 0)
-
     init {
         FinancialConstants.setCustomIconOverrides(_categoryIcons.value)
-        consolidateDuplicateCategories()
-        NotificationHelper.createNotificationChannels(application)
 
-        // Sync default start date when transactions change if preset is ALL
+        viewModelScope.launch(Dispatchers.IO) {
+            consolidateSameMonthCategories()
+        }
+
+        // Sync default start/end date when transactions change if preset is ALL
         viewModelScope.launch {
             repository.allTransactions.collect { txs ->
                 if (_filterPreset.value == DateFilterPreset.ALL && txs.isNotEmpty()) {
                     _filterStartDate.value = DateFilterUtils.getDefaultStartDate(txs)
-                }
-            }
-        }
-
-        // Automatically mirror active smart notifications to the Android system notification shade
-        viewModelScope.launch {
-            smartNotifications.collect { items ->
-                syncSystemNotifications(items)
-            }
-        }
-    }
-
-    private fun syncSystemNotifications(items: List<SmartNotificationItem>, forceAll: Boolean = false) {
-        val app = getApplication<Application>()
-        if (!_isNotificationsEnabled.value || !NotificationHelper.hasNotificationPermission(app)) {
-            return
-        }
-
-        val isAr = _language.value == "ar"
-        val activeIds = items.map { it.id }.toSet()
-
-        // Cancel notifications that are no longer active
-        val staleIds = dispatchedNotificationSignatures.keys.filter { it !in activeIds }
-        staleIds.forEach { staleId ->
-            NotificationHelper.cancelSmartNotification(app, staleId)
-            dispatchedNotificationSignatures.remove(staleId)
-        }
-
-        // Post new or updated notifications to the Android system notification shade
-        items.forEach { item ->
-            val signature = "${item.titleAr}|${item.messageAr}|$isAr"
-            if (forceAll || dispatchedNotificationSignatures[item.id] != signature) {
-                val sent = NotificationHelper.postSmartNotification(app, item, isAr)
-                if (sent) {
-                    dispatchedNotificationSignatures[item.id] = signature
+                    val maxTxDate = txs.maxOfOrNull { it.dateMillis } ?: System.currentTimeMillis()
+                    val todayEnd = DateFilterUtils.getTodayEndOfDay()
+                    _filterEndDate.value = maxOf(todayEnd, DateFilterUtils.getEndOfDay(maxTxDate))
                 }
             }
         }
     }
 
-    suspend fun checkAndSendBudgetAlertIfNeeded() {
-        if (!_isNotificationsEnabled.value || !_isBudgetAlertEnabled.value) return
-        val budget = _monthlyBudget.value
-        if (budget <= 0.0) return
+    /**
+     * Automatically merges duplicate transactions of the same type and category within the same month,
+     * and clears any legacy endDateMillis ranges.
+     */
+    private suspend fun consolidateSameMonthCategories() {
+        val all = repository.getAllTransactionsSync()
+        if (all.isEmpty()) return
 
-        val allTxs = repository.getAllTransactionsSync()
-        val cal = Calendar.getInstance()
-        val currentMonth = cal.get(Calendar.MONTH)
-        val currentYear = cal.get(Calendar.YEAR)
-        val spent = allTxs.filter { tx ->
-            if (tx.type != "EXPENSE") return@filter false
-            val txCal = Calendar.getInstance().apply { timeInMillis = tx.dateMillis }
-            txCal.get(Calendar.MONTH) == currentMonth && txCal.get(Calendar.YEAR) == currentYear
-        }.sumOf { it.amount }
+        val grouped = all.groupBy { tx ->
+            val normCat = FinancialConstants.normalizeCategoryName(tx.category)
+            val ym = MonthlyCalculationUtils.getYearMonth(tx.dateMillis)
+            Triple(tx.type, normCat, ym)
+        }
 
-        val pct = (spent / budget).toFloat()
-        val isExceeded = spent >= budget
-        val isWarning = !isExceeded && pct >= 0.80f
-        val remaining = (budget - spent).coerceAtLeast(0.0)
+        for ((key, group) in grouped) {
+            val normCat = key.second
+            if (group.size > 1) {
+                val primary = group.maxByOrNull { it.dateMillis } ?: group.first()
+                val totalAmount = group.sumOf { it.amount }
+                val latestDate = group.maxOf { it.dateMillis }
+                val mergedNotes = group.map { it.notes.trim() }
+                    .filter { it.isNotBlank() }
+                    .distinct()
+                    .joinToString(" | ")
+                val anyPinned = group.any { it.isPinned }
 
-        val app = getApplication<Application>()
-        if (isExceeded) {
-            val title = if (_language.value == "ar") "🚨 تجاوز الميزانية الشهرية!" else "🚨 Budget Exceeded!"
-            val msg = if (_language.value == "ar") {
-                "لقد تجاوزت ميزانيتك المحددة لهذا الشهر بمقدار ${Formatters.formatMoney(spent - budget)}"
+                val updatedPrimary = primary.copy(
+                    category = normCat,
+                    amount = totalAmount,
+                    dateMillis = latestDate,
+                    endDateMillis = null,
+                    notes = mergedNotes,
+                    isPinned = anyPinned
+                )
+                repository.updateTransaction(updatedPrimary)
+
+                for (dup in group) {
+                    if (dup.id != primary.id) {
+                        repository.deleteTransactionById(dup.id)
+                    }
+                }
             } else {
-                "You have exceeded your monthly budget by ${Formatters.formatMoney(spent - budget)}"
+                val single = group.first()
+                if (single.category != normCat || single.endDateMillis != null) {
+                    repository.updateTransaction(
+                        single.copy(
+                            category = normCat,
+                            endDateMillis = null
+                        )
+                    )
+                }
             }
-            NotificationHelper.sendBudgetAlert(app, title, msg)
-        } else if (isWarning) {
-            val title = if (_language.value == "ar") "⚠️ تنبيه الميزانية الشهرية" else "⚠️ Monthly Budget Alert"
-            val pctInt = (pct * 100).toInt()
-            val msg = if (_language.value == "ar") {
-                "تم استهلاك $pctInt% من ميزانيتك الشهرية. المتبقي: ${Formatters.formatMoney(remaining)}"
-            } else {
-                "You have spent $pctInt% of your budget. Remaining: ${Formatters.formatMoney(remaining)}"
-            }
-            NotificationHelper.sendBudgetAlert(app, title, msg)
         }
     }
 
@@ -649,60 +313,203 @@ class WalletViewModel(application: Application) : AndroidViewModel(application) 
     ) {
         viewModelScope.launch {
             val normalizedCat = FinancialConstants.normalizeCategoryName(category)
+            val allExisting = withContext(Dispatchers.IO) { repository.getAllTransactionsSync() }
 
             if (id > 0) {
-                // Editing an existing transaction: update this specific transaction entity
-                val entity = TransactionEntity(
-                    id = id,
-                    type = type,
-                    amount = amount,
-                    category = normalizedCat,
-                    paymentMethod = paymentMethod,
-                    dateMillis = dateMillis,
-                    endDateMillis = endDateMillis,
-                    notes = notes,
-                    isPinned = isPinned,
-                    receiptUri = receiptUri,
-                    receiptMimeType = receiptMimeType
-                )
-                repository.updateTransaction(entity)
-                val msg = if (_language.value == "ar") "تم تعديل العملية بنجاح" else "Transaction updated successfully"
+                // Editing an existing transaction: check if another transaction with the same type & category exists in the target month
+                val sameMonthOthers = allExisting.filter { tx ->
+                    tx.id != id &&
+                        tx.type == type &&
+                        FinancialConstants.normalizeCategoryName(tx.category) == normalizedCat &&
+                        MonthlyCalculationUtils.isSameMonth(tx.dateMillis, dateMillis)
+                }
+
+                if (sameMonthOthers.isNotEmpty()) {
+                    val primary = sameMonthOthers.first()
+                    val mergedAmount = sameMonthOthers.sumOf { it.amount } + amount
+                    val mergedNotes = (sameMonthOthers.map { it.notes.trim() } + notes.trim())
+                        .filter { it.isNotBlank() }
+                        .distinct()
+                        .joinToString(" | ")
+                    val anyPinned = isPinned || sameMonthOthers.any { it.isPinned }
+
+                    withContext(Dispatchers.IO) {
+                        repository.updateTransaction(
+                            primary.copy(
+                                category = normalizedCat,
+                                amount = mergedAmount,
+                                dateMillis = dateMillis,
+                                endDateMillis = null,
+                                notes = mergedNotes,
+                                isPinned = anyPinned
+                            )
+                        )
+                        repository.deleteTransactionById(id)
+                        for (extra in sameMonthOthers.drop(1)) {
+                            repository.deleteTransactionById(extra.id)
+                        }
+                    }
+                    val msg = if (_language.value == "ar") {
+                        "تم تحديث العملية ودمجها مع فئة \"$normalizedCat\" لنفس الشهر"
+                    } else {
+                        "Transaction updated and merged with \"$normalizedCat\" for the same month"
+                    }
+                    _feedback.emit(UserFeedback.Success(msg))
+                } else {
+                    val entity = TransactionEntity(
+                        id = id,
+                        type = type,
+                        amount = amount,
+                        category = normalizedCat,
+                        paymentMethod = paymentMethod,
+                        dateMillis = dateMillis,
+                        endDateMillis = null,
+                        notes = notes,
+                        isPinned = isPinned,
+                        receiptUri = null,
+                        receiptMimeType = null
+                    )
+                    withContext(Dispatchers.IO) {
+                        repository.updateTransaction(entity)
+                    }
+                    val msg = if (_language.value == "ar") "تم تعديل العملية بنجاح" else "Transaction updated successfully"
+                    _feedback.emit(UserFeedback.Success(msg))
+                }
+            } else {
+                // Adding a NEW transaction: check if the same category & type already exists in the same month
+                val sameMonthMatches = allExisting.filter { tx ->
+                    tx.type == type &&
+                        FinancialConstants.normalizeCategoryName(tx.category) == normalizedCat &&
+                        MonthlyCalculationUtils.isSameMonth(tx.dateMillis, dateMillis)
+                }
+
+                if (sameMonthMatches.isNotEmpty()) {
+                    val primary = sameMonthMatches.first()
+                    val mergedAmount = sameMonthMatches.sumOf { it.amount } + amount
+                    val latestDate = maxOf(primary.dateMillis, dateMillis)
+                    val mergedNotes = (sameMonthMatches.map { it.notes.trim() } + notes.trim())
+                        .filter { it.isNotBlank() }
+                        .distinct()
+                        .joinToString(" | ")
+                    val anyPinned = isPinned || sameMonthMatches.any { it.isPinned }
+
+                    withContext(Dispatchers.IO) {
+                        repository.updateTransaction(
+                            primary.copy(
+                                category = normalizedCat,
+                                amount = mergedAmount,
+                                dateMillis = latestDate,
+                                endDateMillis = null,
+                                notes = mergedNotes,
+                                isPinned = anyPinned
+                            )
+                        )
+                        for (extra in sameMonthMatches.drop(1)) {
+                            repository.deleteTransactionById(extra.id)
+                        }
+                    }
+                    val msg = if (_language.value == "ar") {
+                        "تمت إضافة المبلغ ودمجه تلقائياً مع فئة \"$normalizedCat\" لهذا الشهر"
+                    } else {
+                        "Amount added and merged with \"$normalizedCat\" for this month"
+                    }
+                    _feedback.emit(UserFeedback.Success(msg))
+                } else {
+                    val entity = TransactionEntity(
+                        id = 0,
+                        type = type,
+                        amount = amount,
+                        category = normalizedCat,
+                        paymentMethod = paymentMethod,
+                        dateMillis = dateMillis,
+                        endDateMillis = null,
+                        notes = notes,
+                        isPinned = isPinned,
+                        receiptUri = null,
+                        receiptMimeType = null
+                    )
+                    withContext(Dispatchers.IO) {
+                        repository.insertTransaction(entity)
+                    }
+                    val msg = if (_language.value == "ar") "تم حفظ العملية بنجاح" else "Transaction saved successfully"
+                    _feedback.emit(UserFeedback.Success(msg))
+                }
+            }
+        }
+    }
+
+    fun updateTransactionDate(transaction: TransactionEntity, newDateMillis: Long) {
+        viewModelScope.launch {
+            val normalizedCat = FinancialConstants.normalizeCategoryName(transaction.category)
+            val allExisting = withContext(Dispatchers.IO) { repository.getAllTransactionsSync() }
+
+            val sameMonthOthers = allExisting.filter { tx ->
+                tx.id != transaction.id &&
+                    tx.type == transaction.type &&
+                    FinancialConstants.normalizeCategoryName(tx.category) == normalizedCat &&
+                    MonthlyCalculationUtils.isSameMonth(tx.dateMillis, newDateMillis)
+            }
+
+            if (sameMonthOthers.isNotEmpty()) {
+                val primary = sameMonthOthers.first()
+                val mergedAmount = sameMonthOthers.sumOf { it.amount } + transaction.amount
+                val mergedNotes = (sameMonthOthers.map { it.notes.trim() } + transaction.notes.trim())
+                    .filter { it.isNotBlank() }
+                    .distinct()
+                    .joinToString(" | ")
+                val anyPinned = transaction.isPinned || sameMonthOthers.any { it.isPinned }
+
+                withContext(Dispatchers.IO) {
+                    repository.updateTransaction(
+                        primary.copy(
+                            category = normalizedCat,
+                            amount = mergedAmount,
+                            dateMillis = newDateMillis,
+                            endDateMillis = null,
+                            notes = mergedNotes,
+                            isPinned = anyPinned
+                        )
+                    )
+                    repository.deleteTransactionById(transaction.id)
+                    for (extra in sameMonthOthers.drop(1)) {
+                        repository.deleteTransactionById(extra.id)
+                    }
+                }
+                val msg = if (_language.value == "ar") {
+                    "تم تغيير التاريخ ودمج العملية مع فئة \"$normalizedCat\" لنفس الشهر"
+                } else {
+                    "Date updated and merged with \"$normalizedCat\" in the target month"
+                }
                 _feedback.emit(UserFeedback.Success(msg))
             } else {
-                // Adding a NEW transaction: always save as an independent entity with its own date and time
-                val entity = TransactionEntity(
-                    id = 0,
-                    type = type,
-                    amount = amount,
+                val updated = transaction.copy(
                     category = normalizedCat,
-                    paymentMethod = paymentMethod,
-                    dateMillis = dateMillis,
-                    endDateMillis = endDateMillis,
-                    notes = notes,
-                    isPinned = isPinned,
-                    receiptUri = receiptUri,
-                    receiptMimeType = receiptMimeType
+                    dateMillis = newDateMillis,
+                    endDateMillis = null
                 )
-                repository.insertTransaction(entity)
-                val msg = if (_language.value == "ar") "تم حفظ العملية بنجاح" else "Transaction saved successfully"
+                withContext(Dispatchers.IO) {
+                    repository.updateTransaction(updated)
+                }
+                val msg = if (_language.value == "ar") "تم تحديث تاريخ العملية بنجاح" else "Transaction date updated successfully"
                 _feedback.emit(UserFeedback.Success(msg))
-            }
-            if (type == "EXPENSE") {
-                checkAndSendBudgetAlertIfNeeded()
             }
         }
     }
 
     fun deleteTransaction(transaction: TransactionEntity) {
         viewModelScope.launch {
-            repository.deleteTransaction(transaction)
+            withContext(Dispatchers.IO) {
+                repository.deleteTransaction(transaction)
+            }
             _feedback.emit(UserFeedback.Success("تم حذف العملية بنجاح"))
         }
     }
 
     fun togglePin(transaction: TransactionEntity) {
         viewModelScope.launch {
-            repository.togglePinTransaction(transaction)
+            withContext(Dispatchers.IO) {
+                repository.togglePinTransaction(transaction)
+            }
         }
     }
 
@@ -727,36 +534,26 @@ class WalletViewModel(application: Application) : AndroidViewModel(application) 
                 notes = notes,
                 enableReminder = enableReminder
             )
+            withContext(Dispatchers.IO) {
+                if (id > 0) {
+                    repository.updateDebt(entity)
+                } else {
+                    repository.insertDebt(entity)
+                }
+            }
             if (id > 0) {
-                repository.updateDebt(entity)
                 _feedback.emit(UserFeedback.Success("تم تعديل بيانات الدين بنجاح"))
             } else {
-                repository.insertDebt(entity)
                 _feedback.emit(UserFeedback.Success("تم تسجيل الدين بنجاح"))
-            }
-            if (_isNotificationsEnabled.value && (_isDebtAlertEnabled.value || enableReminder)) {
-                val app = getApplication<Application>()
-                val isAr = _language.value == "ar"
-                val title = if (type == "OWED_TO_ME") {
-                    if (isAr) "💰 تذكير بدين مستحق لك" else "💰 Receivable Debt Reminder"
-                } else {
-                    if (isAr) "🤝 تذكير بدين مستحق عليك" else "🤝 Payable Debt Reminder"
-                }
-                val msg = if (type == "OWED_TO_ME") {
-                    if (isAr) "تم تفعيل متابعة دين بمبلغ ${Formatters.formatMoney(totalAmount)} طرف $personName."
-                    else "Tracking receivable of ${Formatters.formatMoney(totalAmount)} from $personName."
-                } else {
-                    if (isAr) "تم تفعيل تذكير سداد دين بمبلغ ${Formatters.formatMoney(totalAmount)} لصالح $personName."
-                    else "Tracking payable of ${Formatters.formatMoney(totalAmount)} to $personName."
-                }
-                NotificationHelper.sendDebtReminder(app, title, msg)
             }
         }
     }
 
     fun deleteDebt(debt: DebtEntity) {
         viewModelScope.launch {
-            repository.deleteDebt(debt)
+            withContext(Dispatchers.IO) {
+                repository.deleteDebt(debt)
+            }
             _feedback.emit(UserFeedback.Success("تم حذف الدين بنجاح"))
         }
     }
@@ -769,14 +566,18 @@ class WalletViewModel(application: Application) : AndroidViewModel(application) 
                 paymentDateMillis = paymentDate,
                 note = note
             )
-            repository.addDebtPayment(payment)
+            withContext(Dispatchers.IO) {
+                repository.addDebtPayment(payment)
+            }
             _feedback.emit(UserFeedback.Success("تم تسجيل دفعة السداد بنجاح"))
         }
     }
 
     fun deleteDebtPayment(payment: DebtPaymentEntity) {
         viewModelScope.launch {
-            repository.deleteDebtPayment(payment)
+            withContext(Dispatchers.IO) {
+                repository.deleteDebtPayment(payment)
+            }
             _feedback.emit(UserFeedback.Success("تم حذف الدفعة بنجاح"))
         }
     }
@@ -795,21 +596,29 @@ class WalletViewModel(application: Application) : AndroidViewModel(application) 
                     _feedback.emit(UserFeedback.Error(if (_language.value == "ar") "تنبيه: تاريخ البداية لا يمكن أن يكون بعد تاريخ النهاية" else "Start date cannot be after end date"))
                     return@launch
                 }
-                val transactions = customTransactions ?: dateFilteredTransactions.value
+                val rawTransactions = customTransactions ?: dateFilteredTransactions.value
+                val transactions = rawTransactions.map { tx ->
+                    val allocated = MonthlyCalculationUtils.calculateTransactionAmountForRange(
+                        tx, _filterStartDate.value, _filterEndDate.value
+                    )
+                    tx.copy(amount = allocated)
+                }.filter { it.amount > 0.0 }
                 if (transactions.isEmpty()) {
                     _feedback.emit(UserFeedback.Error(if (_language.value == "ar") "لا توجد معاملات في نطاق التاريخ المحدد للتصدير" else "No transactions in the selected date range"))
                     return@launch
                 }
                 val currencySymbol = getCurrencySymbol()
-                val result = PdfExporter.exportPdfReport(
-                    context = context,
-                    transactions = transactions,
-                    currencySymbol = currencySymbol,
-                    periodName = periodTitle,
-                    startDateStr = startDateStr,
-                    endDateStr = endDateStr,
-                    share = false
-                )
+                val result = withContext(Dispatchers.IO) {
+                    PdfExporter.exportPdfReport(
+                        context = context,
+                        transactions = transactions,
+                        currencySymbol = currencySymbol,
+                        periodName = periodTitle,
+                        startDateStr = startDateStr,
+                        endDateStr = endDateStr,
+                        share = false
+                    )
+                }
                 when (result) {
                     is PdfExporter.SaveResult.Success -> {
                         val msg = if (_language.value == "ar") {
@@ -852,21 +661,29 @@ class WalletViewModel(application: Application) : AndroidViewModel(application) 
                     _feedback.emit(UserFeedback.Error(if (_language.value == "ar") "تنبيه: تاريخ البداية لا يمكن أن يكون بعد تاريخ النهاية" else "Start date cannot be after end date"))
                     return@launch
                 }
-                val transactions = customTransactions ?: dateFilteredTransactions.value
+                val rawTransactions = customTransactions ?: dateFilteredTransactions.value
+                val transactions = rawTransactions.map { tx ->
+                    val allocated = MonthlyCalculationUtils.calculateTransactionAmountForRange(
+                        tx, _filterStartDate.value, _filterEndDate.value
+                    )
+                    tx.copy(amount = allocated)
+                }.filter { it.amount > 0.0 }
                 if (transactions.isEmpty()) {
                     _feedback.emit(UserFeedback.Error(if (_language.value == "ar") "لا توجد معاملات في نطاق التاريخ المحدد للتصدير" else "No transactions in the selected date range"))
                     return@launch
                 }
                 val currencySymbol = getCurrencySymbol()
-                val result = PdfExporter.exportPdfReport(
-                    context = context,
-                    transactions = transactions,
-                    currencySymbol = currencySymbol,
-                    periodName = periodTitle,
-                    startDateStr = startDateStr,
-                    endDateStr = endDateStr,
-                    share = true
-                )
+                val result = withContext(Dispatchers.IO) {
+                    PdfExporter.exportPdfReport(
+                        context = context,
+                        transactions = transactions,
+                        currencySymbol = currencySymbol,
+                        periodName = periodTitle,
+                        startDateStr = startDateStr,
+                        endDateStr = endDateStr,
+                        share = true
+                    )
+                }
                 if (result is PdfExporter.SaveResult.Failure) {
                     _feedback.emit(UserFeedback.Error(result.errorMessage))
                 }
@@ -878,38 +695,96 @@ class WalletViewModel(application: Application) : AndroidViewModel(application) 
         }
     }
 
+    fun exportDebtsPdf(context: Context, share: Boolean = false) {
+        viewModelScope.launch {
+            _isGeneratingPdf.value = true
+            try {
+                val debts = allDebtsWithPayments.value.map { it.toDebtRecord() }
+                if (debts.isEmpty()) {
+                    _feedback.emit(UserFeedback.Error(if (_language.value == "ar") "لا توجد ديون مسجلة لتصدير التقرير" else "No debts recorded to export"))
+                    return@launch
+                }
+                val currencySymbol = getCurrencySymbol()
+                val result = withContext(Dispatchers.IO) {
+                    PdfExporter.exportDebtsPdfReport(
+                        context = context,
+                        debts = debts,
+                        currencySymbol = currencySymbol,
+                        share = share
+                    )
+                }
+                if (!share) {
+                    when (result) {
+                        is PdfExporter.SaveResult.Success -> {
+                            val msg = if (_language.value == "ar") {
+                                "تم حفظ تقرير الديون في مجلد التنزيلات: ${result.fileName}"
+                            } else {
+                                "Debts report saved to Downloads: ${result.fileName}"
+                            }
+                            val actionLabel = if (_language.value == "ar") "فتح" else "Open"
+                            _feedback.emit(
+                                UserFeedback.Success(
+                                    message = msg,
+                                    actionLabel = actionLabel,
+                                    action = { PdfExporter.openPdf(context, result.uri, result.file) }
+                                )
+                            )
+                        }
+                        is PdfExporter.SaveResult.Failure -> {
+                            _feedback.emit(UserFeedback.Error(result.errorMessage))
+                        }
+                    }
+                } else if (result is PdfExporter.SaveResult.Failure) {
+                    _feedback.emit(UserFeedback.Error(result.errorMessage))
+                }
+            } catch (e: Exception) {
+                _feedback.emit(UserFeedback.Error(e.localizedMessage ?: "حدث خطأ أثناء تصدير تقرير الديون"))
+            } finally {
+                _isGeneratingPdf.value = false
+            }
+        }
+    }
+
     fun exportBackup(context: Context) {
         viewModelScope.launch {
             _isBackingUp.value = true
             try {
-                val transactions = repository.getAllTransactionsSync()
-                val debts = repository.getAllDebtsSync()
-                val payments = repository.getAllDebtPaymentsSync()
-                val customCats = _customCategories.value
-                val catIcons = _categoryIcons.value
-                val budget = _monthlyBudget.value
+                val appContext = getApplication<Application>()
+                val result = withContext(Dispatchers.IO) {
+                    val transactions = repository.getAllTransactionsSync()
+                    val debts = repository.getAllDebtsSync()
+                    val payments = repository.getAllDebtPaymentsSync()
+                    val customCats = _customCategories.value
+                    val catIcons = _categoryIcons.value
 
-                val result = BackupManager.exportBackup(
-                    context = context,
-                    transactions = transactions,
-                    debts = debts,
-                    debtPayments = payments,
-                    customCategories = customCats,
-                    categoryIcons = catIcons,
-                    monthlyBudget = budget
-                )
+                    BackupManager.exportBackup(
+                        context = appContext,
+                        transactions = transactions,
+                        debts = debts,
+                        debtPayments = payments,
+                        customCategories = customCats,
+                        categoryIcons = catIcons
+                    )
+                }
 
                 result.fold(
-                    onSuccess = { fileName ->
+                    onSuccess = { exportResult ->
                         val dateFormatted = DateFilterUtils.formatDateArabic(System.currentTimeMillis())
                         _lastBackupDate.value = dateFormatted
                         prefs.edit().putString("last_backup_date", dateFormatted).apply()
                         val msg = if (_language.value == "ar") {
-                            "تم تصدير النسخة الاحتياطية بنجاح إلى مجلد Downloads:\n$fileName"
+                            "تم تصدير النسخة الاحتياطية بنجاح: ${exportResult.fileName}"
                         } else {
-                            "Backup successfully saved to Downloads:\n$fileName"
+                            "Backup exported successfully: ${exportResult.fileName}"
                         }
-                        _feedback.emit(UserFeedback.Success(msg))
+                        val shareLabel = if (_language.value == "ar") "مشاركة" else "Share"
+                        _feedback.emit(
+                            UserFeedback.Success(
+                                message = msg,
+                                actionLabel = shareLabel,
+                                action = { BackupManager.shareBackupFile(context, exportResult.localFile) }
+                            )
+                        )
                     },
                     onFailure = { error ->
                         val msg = error.localizedMessage ?: "حدث خطأ أثناء تصدير النسخة الاحتياطية"
@@ -924,33 +799,112 @@ class WalletViewModel(application: Application) : AndroidViewModel(application) 
         }
     }
 
-    fun validateBackupFile(context: Context, uri: Uri): Result<BackupPackage> {
-        return BackupManager.parseAndValidateBackup(context, uri)
+    fun exportBackupToUri(uri: Uri) {
+        viewModelScope.launch {
+            _isBackingUp.value = true
+            try {
+                val appContext = getApplication<Application>()
+                val result = withContext(Dispatchers.IO) {
+                    val transactions = repository.getAllTransactionsSync()
+                    val debts = repository.getAllDebtsSync()
+                    val payments = repository.getAllDebtPaymentsSync()
+                    val customCats = _customCategories.value
+                    val catIcons = _categoryIcons.value
+
+                    BackupManager.exportBackupToUri(
+                        context = appContext,
+                        targetUri = uri,
+                        transactions = transactions,
+                        debts = debts,
+                        debtPayments = payments,
+                        customCategories = customCats,
+                        categoryIcons = catIcons
+                    )
+                }
+                result.fold(
+                    onSuccess = {
+                        val dateFormatted = DateFilterUtils.formatDateArabic(System.currentTimeMillis())
+                        _lastBackupDate.value = dateFormatted
+                        prefs.edit().putString("last_backup_date", dateFormatted).apply()
+                        val msg = if (_language.value == "ar") {
+                            "تم حفظ ملف النسخة الاحتياطية بنجاح"
+                        } else {
+                            "Backup file saved successfully"
+                        }
+                        _feedback.emit(UserFeedback.Success(msg))
+                    },
+                    onFailure = { error ->
+                        val msg = error.localizedMessage ?: "حدث خطأ أثناء حفظ النسخة الاحتياطية"
+                        _feedback.emit(UserFeedback.Error(msg))
+                    }
+                )
+            } catch (e: Exception) {
+                _feedback.emit(UserFeedback.Error(e.localizedMessage ?: "فشل حفظ النسخة الاحتياطية"))
+            } finally {
+                _isBackingUp.value = false
+            }
+        }
+    }
+
+    fun validateBackupFileAsync(
+        uri: Uri,
+        onSuccess: (BackupPackage) -> Unit,
+        onFailure: (String) -> Unit
+    ) {
+        viewModelScope.launch {
+            _isRestoring.value = true
+            try {
+                val appContext = getApplication<Application>()
+                val result = withContext(Dispatchers.IO) {
+                    BackupManager.parseAndValidateBackup(appContext, uri)
+                }
+                result.fold(
+                    onSuccess = { pkg ->
+                        onSuccess(pkg)
+                    },
+                    onFailure = { err ->
+                        val msg = err.localizedMessage
+                            ?: if (_language.value == "ar") "ملف النسخة الاحتياطية غير صالح أو تالف" else "Invalid backup file"
+                        onFailure(msg)
+                    }
+                )
+            } catch (e: Exception) {
+                val msg = e.localizedMessage
+                    ?: if (_language.value == "ar") "ملف النسخة الاحتياطية غير صالح" else "Invalid backup file"
+                onFailure(msg)
+            } finally {
+                _isRestoring.value = false
+            }
+        }
     }
 
     fun restoreBackup(context: Context, backupPackage: BackupPackage) {
         viewModelScope.launch {
             _isRestoring.value = true
             try {
-                repository.restoreAllData(
-                    transactions = backupPackage.transactions,
-                    debts = backupPackage.debts,
-                    payments = backupPackage.debtPayments
-                )
-
-                // Restore custom categories
+                // Restore custom categories & icons first so UI maps them immediately
                 _customCategories.value = backupPackage.customCategories
                 saveCustomCategories(backupPackage.customCategories)
 
-                // Restore category icons
                 _categoryIcons.value = backupPackage.categoryIcons
                 saveCategoryIcons(backupPackage.categoryIcons)
                 FinancialConstants.setCustomIconOverrides(backupPackage.categoryIcons)
 
-                // Restore monthly budget
-                if (backupPackage.monthlyBudget >= 0.0) {
-                    _monthlyBudget.value = backupPackage.monthlyBudget
-                    prefs.edit().putFloat("monthly_budget_amount", backupPackage.monthlyBudget.toFloat()).apply()
+                withContext(Dispatchers.IO) {
+                    repository.restoreAllData(
+                        transactions = backupPackage.transactions,
+                        debts = backupPackage.debts,
+                        payments = backupPackage.debtPayments
+                    )
+                    consolidateSameMonthCategories()
+                }
+
+                // Update date filter range so restored transactions are immediately visible
+                if (backupPackage.transactions.isNotEmpty()) {
+                    val range = DateFilterUtils.calculatePresetRange(_filterPreset.value, backupPackage.transactions)
+                    _filterStartDate.value = range.first
+                    val maxTxDate = backupPackage.transactions.maxOfOrNull { it.dateMillis } ?: range.second
+                    _filterEndDate.value = maxOf(range.second, DateFilterUtils.getEndOfDay(maxTxDate))
                 }
 
                 val msg = if (_language.value == "ar") {
@@ -972,12 +926,14 @@ class WalletViewModel(application: Application) : AndroidViewModel(application) 
             _isGeneratingPdf.value = true
             try {
                 val debts = allDebtsWithPayments.value.map { it.toDebtRecord() }
-                val result = PdfExporter.exportDebtsPdfReport(
-                    context = context,
-                    debts = debts,
-                    currencySymbol = getCurrencySymbol(),
-                    share = false
-                )
+                val result = withContext(Dispatchers.IO) {
+                    PdfExporter.exportDebtsPdfReport(
+                        context = context,
+                        debts = debts,
+                        currencySymbol = getCurrencySymbol(),
+                        share = false
+                    )
+                }
                 when (result) {
                     is PdfExporter.SaveResult.Success -> {
                         val msg = if (_language.value == "ar") {
@@ -1011,12 +967,14 @@ class WalletViewModel(application: Application) : AndroidViewModel(application) 
             _isGeneratingPdf.value = true
             try {
                 val debts = allDebtsWithPayments.value.map { it.toDebtRecord() }
-                val result = PdfExporter.exportDebtsPdfReport(
-                    context = context,
-                    debts = debts,
-                    currencySymbol = getCurrencySymbol(),
-                    share = true
-                )
+                val result = withContext(Dispatchers.IO) {
+                    PdfExporter.exportDebtsPdfReport(
+                        context = context,
+                        debts = debts,
+                        currencySymbol = getCurrencySymbol(),
+                        share = true
+                    )
+                }
                 if (result is PdfExporter.SaveResult.Failure) {
                     _feedback.emit(UserFeedback.Error(result.errorMessage))
                 }
@@ -1030,7 +988,9 @@ class WalletViewModel(application: Application) : AndroidViewModel(application) 
 
     fun clearAllData() {
         viewModelScope.launch {
-            repository.clearAllData()
+            withContext(Dispatchers.IO) {
+                repository.clearAllData()
+            }
             _customCategories.value = emptyList()
             _categoryIcons.value = emptyMap()
             prefs.edit()
@@ -1213,42 +1173,6 @@ class WalletViewModel(application: Application) : AndroidViewModel(application) 
             prefs.edit().putString("custom_categories_list", arr.toString()).apply()
         } catch (e: Exception) {
             // ignore
-        }
-    }
-
-    fun consolidateDuplicateCategories() {
-        viewModelScope.launch {
-            try {
-                val all = repository.getAllTransactionsSync()
-                val grouped = all.groupBy { Pair(it.type, FinancialConstants.normalizeCategoryName(it.category)) }
-                for ((key, txs) in grouped) {
-                    if (txs.size > 1) {
-                        val primary = txs.first()
-                        val totalAmount = txs.sumOf { it.amount }
-                        val allNotes = txs.map { it.notes }.filter { it.isNotBlank() }.distinct().joinToString(" • ")
-                        val latestDate = txs.maxOf { it.dateMillis }
-                        val hasPinned = txs.any { it.isPinned }
-                        val receipt = txs.firstOrNull { it.receiptUri != null }
-
-                        repository.updateTransaction(
-                            primary.copy(
-                                amount = totalAmount,
-                                dateMillis = latestDate,
-                                notes = allNotes,
-                                isPinned = hasPinned,
-                                receiptUri = receipt?.receiptUri,
-                                receiptMimeType = receipt?.receiptMimeType,
-                                category = key.second
-                            )
-                        )
-                        for (dup in txs.drop(1)) {
-                            repository.deleteTransaction(dup)
-                        }
-                    }
-                }
-            } catch (e: Exception) {
-                // Ignore any consolidation errors on startup
-            }
         }
     }
 }

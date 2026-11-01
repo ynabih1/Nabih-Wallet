@@ -1,15 +1,18 @@
 package com.example.ui.reports
 
+import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsHoveredAsState
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -24,13 +27,11 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.DateRange
-import androidx.compose.material.icons.filled.Download
+import androidx.compose.material.icons.filled.PictureAsPdf
 import androidx.compose.material.icons.filled.ReceiptLong
-import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -65,7 +66,9 @@ import com.example.ui.components.DateFilterPreset
 import com.example.ui.components.DateFilterUtils
 import com.example.ui.components.DateRangeSelectionDialog
 import com.example.ui.components.Formatters
+import com.example.ui.components.MonthlyCalculationUtils
 import com.example.ui.theme.BorderSubtle
+import com.example.ui.theme.BurntOrangeDark
 import com.example.ui.theme.BurntOrangePrimary
 import com.example.ui.theme.MutedIncomeGreen
 import com.example.ui.theme.TextMutedBrown
@@ -117,13 +120,15 @@ fun ReportsScreen(
 
     // 1. Transactions in Date Range (Expenses)
     val expenseTransactions = remember(allTransactions, filterStartDate, filterEndDate) {
-        allTransactions.filter {
-            it.type == "EXPENSE" && it.dateMillis in filterStartDate..filterEndDate
+        allTransactions.filter { tx ->
+            tx.type == "EXPENSE" && tx.dateMillis in filterStartDate..filterEndDate
         }
     }
 
-    val totalExpenses = remember(expenseTransactions) {
-        expenseTransactions.sumOf { it.amount }
+    val totalExpenses = remember(expenseTransactions, filterStartDate, filterEndDate) {
+        expenseTransactions.sumOf { tx ->
+            MonthlyCalculationUtils.calculateTransactionAmountForRange(tx, filterStartDate, filterEndDate)
+        }
     }
 
     // 2. Categories Breakdown & Color Mapping
@@ -134,10 +139,16 @@ fun ReportsScreen(
         val color: Color
     )
 
-    val categoryStats = remember(expenseTransactions, totalExpenses) {
+    val categoryStats = remember(expenseTransactions, totalExpenses, filterStartDate, filterEndDate) {
         val grouped = expenseTransactions
             .groupBy { FinancialConstants.normalizeCategoryName(it.category) }
-            .map { (cat, list) -> cat to list.sumOf { it.amount } }
+            .map { (cat, list) ->
+                val sum = list.sumOf { tx ->
+                    MonthlyCalculationUtils.calculateTransactionAmountForRange(tx, filterStartDate, filterEndDate)
+                }
+                cat to sum
+            }
+            .filter { it.second > 0.0 }
             .sortedByDescending { it.second }
 
         val volume = if (totalExpenses > 0.0) totalExpenses else 1.0
@@ -149,23 +160,25 @@ fun ReportsScreen(
     }
 
     // 3. Month Breakdown Card Data (Last months with spending)
+    data class MonthHistoryItem(
+        val startMillis: Long,
+        val endMillis: Long,
+        val title: String,
+        val amount: Double
+    )
+
     val monthlyHistory = remember(allTransactions, isArabic) {
-        val expenses = allTransactions.filter { it.type == "EXPENSE" }
+        val activeMonths = MonthlyCalculationUtils.getAllActiveMonths(allTransactions)
         val sdf = SimpleDateFormat("MMMM yyyy", if (isArabic) Locale("ar") else Locale.ENGLISH)
-        expenses.groupBy {
-            val cal = Calendar.getInstance().apply {
-                timeInMillis = it.dateMillis
-                set(Calendar.DAY_OF_MONTH, 1)
-                set(Calendar.HOUR_OF_DAY, 0)
-                set(Calendar.MINUTE, 0)
-                set(Calendar.SECOND, 0)
-                set(Calendar.MILLISECOND, 0)
-            }
-            cal.timeInMillis
-        }.map { (monthMillis, list) ->
-            Triple(monthMillis, sdf.format(Date(monthMillis)), list.sumOf { it.amount })
-        }.sortedByDescending { it.first }
-        .take(4)
+        activeMonths.mapNotNull { ym ->
+            val monthSpent = MonthlyCalculationUtils.calculateMonthlyExpenses(allTransactions, ym.year, ym.monthValue)
+            if (monthSpent > 0.0) {
+                val startMillis = MonthlyCalculationUtils.getMonthStartMillis(ym.year, ym.monthValue)
+                val endMillis = MonthlyCalculationUtils.getMonthEndMillis(ym.year, ym.monthValue)
+                MonthHistoryItem(startMillis, endMillis, sdf.format(Date(startMillis)), monthSpent)
+            } else null
+        }.sortedByDescending { it.startMillis }
+        .take(6)
     }
 
     // Date range labels
@@ -173,9 +186,9 @@ fun ReportsScreen(
     val formattedEnd = remember(filterEndDate) { DateFilterUtils.formatDateArabic(filterEndDate) }
     val periodDisplay = remember(filterPreset, formattedStart, formattedEnd, isArabic) {
         when (filterPreset) {
-            DateFilterPreset.THIS_MONTH -> if (isArabic) "هذا الشهر ($formattedStart - $formattedEnd)" else "This Month ($formattedStart - $formattedEnd)"
-            DateFilterPreset.LAST_3_MONTHS -> if (isArabic) "آخر 3 شهور ($formattedStart - $formattedEnd)" else "Last 3 Months ($formattedStart - $formattedEnd)"
-            DateFilterPreset.THIS_YEAR -> if (isArabic) "هذه السنة ($formattedStart - $formattedEnd)" else "This Year ($formattedStart - $formattedEnd)"
+            DateFilterPreset.THIS_MONTH -> if (isArabic) "هذا الشهر • $formattedStart - $formattedEnd" else "This Month • $formattedStart - $formattedEnd"
+            DateFilterPreset.LAST_3_MONTHS -> if (isArabic) "آخر 3 شهور • $formattedStart - $formattedEnd" else "Last 3 Months • $formattedStart - $formattedEnd"
+            DateFilterPreset.THIS_YEAR -> if (isArabic) "هذه السنة • $formattedStart - $formattedEnd" else "This Year • $formattedStart - $formattedEnd"
             DateFilterPreset.ALL -> if (isArabic) "كافة الفترات" else "All Time"
             DateFilterPreset.CUSTOM -> "$formattedStart - $formattedEnd"
         }
@@ -502,7 +515,7 @@ fun ReportsScreen(
                                 )
                                 if (topCatStat != null) {
                                     Text(
-                                        text = "${topCatStat.name} (${String.format(Locale.US, "%.0f", topCatStat.percentage * 100)}%)",
+                                        text = "${topCatStat.name} • ${String.format(Locale.US, "%.0f", topCatStat.percentage * 100)}%",
                                         fontSize = 11.sp,
                                         fontWeight = FontWeight.Medium,
                                         color = TextSecondaryBrown
@@ -666,23 +679,15 @@ fun ReportsScreen(
 
                             Spacer(modifier = Modifier.height(10.dp))
 
-                            monthlyHistory.forEachIndexed { index, (monthStartMillis, monthTitle, amount) ->
+                            monthlyHistory.forEachIndexed { index, item ->
                                 Row(
                                     modifier = Modifier
                                         .fillMaxWidth()
                                         .clip(RoundedCornerShape(10.dp))
                                         .clickable {
-                                            val endCal = Calendar.getInstance().apply {
-                                                timeInMillis = monthStartMillis
-                                                set(Calendar.DAY_OF_MONTH, getActualMaximum(Calendar.DAY_OF_MONTH))
-                                                set(Calendar.HOUR_OF_DAY, 23)
-                                                set(Calendar.MINUTE, 59)
-                                                set(Calendar.SECOND, 59)
-                                                set(Calendar.MILLISECOND, 999)
-                                            }
                                             viewModel.setDateFilter(
-                                                monthStartMillis,
-                                                endCal.timeInMillis,
+                                                item.startMillis,
+                                                item.endMillis,
                                                 DateFilterPreset.CUSTOM
                                             )
                                         }
@@ -707,7 +712,7 @@ fun ReportsScreen(
                                         }
                                         Spacer(modifier = Modifier.width(10.dp))
                                         Text(
-                                            text = monthTitle,
+                                            text = item.title,
                                             fontSize = 13.5.sp,
                                             fontWeight = FontWeight.SemiBold,
                                             color = TextPrimaryDark
@@ -716,7 +721,7 @@ fun ReportsScreen(
 
                                     Row(verticalAlignment = Alignment.CenterVertically) {
                                         Text(
-                                            text = "${Formatters.formatMoney(amount)} $currencySymbol",
+                                            text = "${Formatters.formatMoney(item.amount)} $currencySymbol",
                                             fontSize = 13.8.sp,
                                             fontWeight = FontWeight.Bold,
                                             color = TextPrimaryDark
@@ -745,33 +750,26 @@ fun ReportsScreen(
                 }
             }
 
-            // Bottom spacing to avoid content overlap by the floating export bar
-            item { Spacer(modifier = Modifier.height(92.dp)) }
-        }
+            // =========================================================================
+            // 4. INLINE FLAT PRIMARY EXPORT BUTTON (زر تصدير PDF مدمج ومسطح ضمن عناصر الشاشة)
+            // =========================================================================
+            item {
+                val exportInteractionSource = remember { MutableInteractionSource() }
+                val isExportPressed by exportInteractionSource.collectIsPressedAsState()
+                val isExportHovered by exportInteractionSource.collectIsHoveredAsState()
+                val isExportEnabled = !isGenerating && expenseTransactions.isNotEmpty()
 
-        // =========================================================================
-        // 4. FLOATING EXPORT & SHARE BAR (أزرار التصدير العائمة في الأسفل)
-        // Light floating pill container with download and share buttons
-        // =========================================================================
-        Surface(
-            modifier = Modifier
-                .align(Alignment.BottomCenter)
-                .fillMaxWidth()
-                .navigationBarsPadding()
-                .padding(horizontal = 16.dp, vertical = 8.dp),
-            shape = RoundedCornerShape(16.dp),
-            color = CardWhite,
-            border = BorderStroke(0.5.dp, BorderSubtle),
-            shadowElevation = 0.dp
-        ) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 8.dp, vertical = 6.dp),
-                horizontalArrangement = Arrangement.spacedBy(10.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                // PDF Export Button
+                val animatedExportBgColor by animateColorAsState(
+                    targetValue = when {
+                        !isExportEnabled -> WarmCardSurface
+                        isExportPressed -> BurntOrangeDark
+                        isExportHovered -> BurntOrangeDark.copy(alpha = 0.92f)
+                        else -> BurntOrangePrimary
+                    },
+                    animationSpec = tween(durationMillis = 150),
+                    label = "export_btn_bg"
+                )
+
                 Button(
                     onClick = {
                         viewModel.exportExpensesPdfToDownloads(
@@ -782,16 +780,29 @@ fun ReportsScreen(
                             endDateStr = formattedEnd
                         )
                     },
-                    enabled = !isGenerating && expenseTransactions.isNotEmpty(),
-                    shape = RoundedCornerShape(14.dp),
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = BurntOrangePrimary,
-                        disabledContainerColor = BurntOrangePrimary.copy(alpha = 0.4f)
+                    enabled = isExportEnabled,
+                    interactionSource = exportInteractionSource,
+                    shape = RoundedCornerShape(16.dp),
+                    border = BorderStroke(
+                        width = 0.6.dp,
+                        color = if (isExportEnabled) BurntOrangeDark.copy(alpha = 0.25f) else BorderSubtle
                     ),
-                    elevation = ButtonDefaults.buttonElevation(defaultElevation = 0.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = animatedExportBgColor,
+                        contentColor = Color.White,
+                        disabledContainerColor = WarmCardSurface,
+                        disabledContentColor = TextMutedBrown
+                    ),
+                    elevation = ButtonDefaults.buttonElevation(
+                        defaultElevation = 0.dp,
+                        pressedElevation = 0.dp,
+                        hoveredElevation = 0.dp,
+                        focusedElevation = 0.dp,
+                        disabledElevation = 0.dp
+                    ),
                     modifier = Modifier
-                        .weight(1f)
-                        .height(48.dp)
+                        .fillMaxWidth()
+                        .height(50.dp)
                         .testTag("export_pdf_btn")
                 ) {
                     if (isGenerating) {
@@ -800,62 +811,43 @@ fun ReportsScreen(
                             modifier = Modifier.size(18.dp),
                             strokeWidth = 2.dp
                         )
-                        Spacer(modifier = Modifier.width(8.dp))
+                        Spacer(modifier = Modifier.width(10.dp))
                         Text(
-                            text = if (isArabic) "جاري التصدير..." else "Exporting...",
-                            fontSize = 13.5.sp,
+                            text = if (isArabic) "جاري تصدير ملف PDF..." else "Exporting PDF...",
+                            fontSize = 14.sp,
                             fontWeight = FontWeight.Bold,
                             color = Color.White
                         )
                     } else {
-                        Icon(
-                            imageVector = Icons.Default.Download,
-                            contentDescription = null,
-                            tint = Color.White,
-                            modifier = Modifier.size(18.dp)
-                        )
-                        Spacer(modifier = Modifier.width(8.dp))
+                        Box(
+                            modifier = Modifier
+                                .size(28.dp)
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(
+                                    if (isExportEnabled) Color.White.copy(alpha = 0.18f)
+                                    else BorderSubtle.copy(alpha = 0.6f)
+                                ),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.PictureAsPdf,
+                                contentDescription = null,
+                                tint = if (isExportEnabled) Color.White else TextMutedBrown,
+                                modifier = Modifier.size(17.dp)
+                            )
+                        }
+                        Spacer(modifier = Modifier.width(10.dp))
                         Text(
                             text = if (isArabic) "تصدير PDF" else "Export PDF",
-                            fontSize = 13.5.sp,
+                            fontSize = 14.sp,
                             fontWeight = FontWeight.Bold,
-                            color = Color.White
+                            color = if (isExportEnabled) Color.White else TextMutedBrown
                         )
                     }
                 }
-
-                // Quick Share Button
-                Button(
-                    onClick = {
-                        viewModel.shareExpensesPdf(
-                            context = context,
-                            periodTitle = periodDisplay,
-                            customTransactions = expenseTransactions,
-                            startDateStr = formattedStart,
-                            endDateStr = formattedEnd
-                        )
-                    },
-                    enabled = !isGenerating && expenseTransactions.isNotEmpty(),
-                    shape = RoundedCornerShape(16.dp),
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = MutedIncomeGreen,
-                        disabledContainerColor = MutedIncomeGreen.copy(alpha = 0.4f),
-                        contentColor = Color.White,
-                        disabledContentColor = Color.White.copy(alpha = 0.6f)
-                    ),
-                    contentPadding = PaddingValues(0.dp),
-                    modifier = Modifier
-                        .size(48.dp)
-                        .testTag("share_pdf_btn")
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Share,
-                        contentDescription = if (isArabic) "مشاركة" else "Share",
-                        tint = Color.White,
-                        modifier = Modifier.size(20.dp)
-                    )
-                }
             }
+
+            item { Spacer(modifier = Modifier.height(24.dp)) }
         }
 
         // Custom Date Range Dialog

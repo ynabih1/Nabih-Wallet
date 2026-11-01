@@ -68,11 +68,10 @@ fun AllTransactionsScreen(
 
     var filterType by remember { mutableStateOf(TransactionFilterType.ALL) }
     var searchQuery by remember { mutableStateOf("") }
+    var transactionForDateChange by remember { mutableStateOf<TransactionEntity?>(null) }
 
     val filteredList = allTransactions.filter { tx ->
-        val start = tx.dateMillis
-        val end = tx.endDateMillis ?: tx.dateMillis
-        val inDateRange = start <= filterEndDate && end >= filterStartDate
+        val inDateRange = tx.dateMillis in filterStartDate..filterEndDate
         val matchesType = when (filterType) {
             TransactionFilterType.ALL -> true
             TransactionFilterType.EXPENSE -> tx.type == "EXPENSE"
@@ -203,7 +202,8 @@ fun AllTransactionsScreen(
                         transaction = tx,
                         currencySymbol = currencySymbol,
                         isArabic = isArabic,
-                        onClick = { onEditTransaction(tx) }
+                        onClick = { onEditTransaction(tx) },
+                        onQuickChangeDate = { transactionForDateChange = it }
                     )
                 }
                 item {
@@ -212,4 +212,17 @@ fun AllTransactionsScreen(
             }
         }
     }
+
+    transactionForDateChange?.let { tx ->
+        com.example.ui.components.QuickChangeDateDialog(
+            transaction = tx,
+            isArabic = isArabic,
+            currencySymbol = currencySymbol,
+            onDismiss = { transactionForDateChange = null },
+            onConfirm = { newDate ->
+                viewModel.updateTransactionDate(tx, newDate)
+            }
+        )
+    }
 }
+

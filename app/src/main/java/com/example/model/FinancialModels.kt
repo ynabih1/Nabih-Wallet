@@ -58,35 +58,6 @@ data class PaymentMethodItem(
     val icon: ImageVector
 )
 
-data class MonthlyBudgetStatus(
-    val budgetAmount: Double = 0.0,
-    val spentAmount: Double = 0.0,
-    val remainingAmount: Double = 0.0,
-    val percentage: Float = 0f,
-    val isWarning: Boolean = false,
-    val isExceeded: Boolean = false,
-    val isSet: Boolean = false,
-    val isAlertEnabled: Boolean = true
-)
-
-enum class NotificationSeverity {
-    INFO,
-    WARNING,
-    ALERT
-}
-
-data class SmartNotificationItem(
-    val id: String,
-    val titleAr: String,
-    val titleEn: String,
-    val messageAr: String,
-    val messageEn: String,
-    val severity: NotificationSeverity = NotificationSeverity.INFO,
-    val type: String = "GENERAL", // BUDGET, DEBT, CATEGORY, DAILY
-    val timestamp: Long = System.currentTimeMillis(),
-    val actionRoute: String? = null
-)
-
 object FinancialConstants {
     private val _customIconOverrides = mutableMapOf<String, String>()
 

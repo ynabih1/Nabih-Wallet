@@ -112,6 +112,7 @@ import androidx.compose.ui.unit.sp
 import com.example.data.local.entity.TransactionEntity
 import com.example.model.CategoryItem
 import com.example.model.FinancialConstants
+import com.example.ui.components.DateFilterUtils
 import com.example.ui.components.Formatters
 import com.example.ui.theme.BorderSubtle
 import com.example.ui.theme.BurntOrangeLight
@@ -189,22 +190,13 @@ fun TransactionDialog(
     // All categories available with improved display layout
     val currentCategoryList = if (type == "EXPENSE") activeExpenseList else activeIncomeList
 
-    val selectedDateMillis = remember {
-        initialTransaction?.dateMillis ?: System.currentTimeMillis()
+    var startDateMillis by remember {
+        mutableLongStateOf(initialTransaction?.dateMillis ?: DateFilterUtils.getStartOfDay(System.currentTimeMillis()))
     }
+    var showStartDatePicker by remember { mutableStateOf(false) }
+
     val notes = initialTransaction?.notes ?: ""
     val isPinned = initialTransaction?.isPinned ?: false
-    var receiptUri by remember { mutableStateOf(initialTransaction?.receiptUri) }
-    var receiptMimeType by remember { mutableStateOf(initialTransaction?.receiptMimeType) }
-
-    val photoPickerLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.PickVisualMedia()
-    ) { uri: Uri? ->
-        if (uri != null) {
-            receiptUri = uri.toString()
-            receiptMimeType = "image/*"
-        }
-    }
 
     var showCustomCategoryDialog by remember { mutableStateOf(false) }
     var customCategoryName by remember { mutableStateOf("") }
@@ -227,7 +219,7 @@ fun TransactionDialog(
         dragHandle = {
             BottomSheetDefaults.DragHandle(
                 color = BorderSubtle,
-                width = 38.dp,
+                width = 40.dp,
                 height = 4.dp
             )
         }
@@ -237,7 +229,7 @@ fun TransactionDialog(
                 .fillMaxWidth()
                 .navigationBarsPadding()
                 .imePadding()
-                .padding(horizontal = 16.dp, vertical = 2.dp)
+                .padding(horizontal = 18.dp, vertical = 4.dp)
                 .verticalScroll(rememberScrollState()),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
@@ -254,8 +246,8 @@ fun TransactionDialog(
                 Surface(
                     modifier = Modifier
                         .weight(1f)
-                        .height(40.dp)
-                        .clip(RoundedCornerShape(12.dp))
+                        .height(42.dp)
+                        .clip(RoundedCornerShape(13.dp))
                         .clickable {
                             type = "EXPENSE"
                             val list = activeExpenseList
@@ -263,9 +255,9 @@ fun TransactionDialog(
                                 selectedCategory = list.firstOrNull()?.nameAr ?: ""
                             }
                         },
-                    shape = RoundedCornerShape(12.dp),
+                    shape = RoundedCornerShape(13.dp),
                     color = if (isExpense) BurntOrangePrimary else Color(0xFFFAF9F6),
-                    border = BorderStroke(0.6.dp, if (isExpense) BurntOrangePrimary else BorderSubtle),
+                    border = BorderStroke(0.8.dp, if (isExpense) BurntOrangePrimary else BorderSubtle),
                     shadowElevation = 0.dp
                 ) {
                     Row(
@@ -275,7 +267,7 @@ fun TransactionDialog(
                     ) {
                         Box(
                             modifier = Modifier
-                                .size(22.dp)
+                                .size(24.dp)
                                 .clip(CircleShape)
                                 .background(if (isExpense) Color.White.copy(alpha = 0.22f) else BurntOrangePrimary.copy(alpha = 0.12f)),
                             contentAlignment = Alignment.Center
@@ -290,7 +282,7 @@ fun TransactionDialog(
                         Spacer(modifier = Modifier.width(6.dp))
                         Text(
                             text = if (isArabic) "مصروف" else "Expense",
-                            fontSize = 13.sp,
+                            fontSize = 13.5.sp,
                             fontWeight = if (isExpense) FontWeight.Bold else FontWeight.SemiBold,
                             color = if (isExpense) Color.White else TextPrimaryDark
                         )
@@ -301,8 +293,8 @@ fun TransactionDialog(
                 Surface(
                     modifier = Modifier
                         .weight(1f)
-                        .height(40.dp)
-                        .clip(RoundedCornerShape(12.dp))
+                        .height(42.dp)
+                        .clip(RoundedCornerShape(13.dp))
                         .clickable {
                             type = "INCOME"
                             val list = activeIncomeList
@@ -310,9 +302,9 @@ fun TransactionDialog(
                                 selectedCategory = list.firstOrNull()?.nameAr ?: ""
                             }
                         },
-                    shape = RoundedCornerShape(12.dp),
+                    shape = RoundedCornerShape(13.dp),
                     color = if (isIncome) MutedIncomeGreen else Color(0xFFFAF9F6),
-                    border = BorderStroke(0.6.dp, if (isIncome) MutedIncomeGreen else BorderSubtle),
+                    border = BorderStroke(0.8.dp, if (isIncome) MutedIncomeGreen else BorderSubtle),
                     shadowElevation = 0.dp
                 ) {
                     Row(
@@ -322,7 +314,7 @@ fun TransactionDialog(
                     ) {
                         Box(
                             modifier = Modifier
-                                .size(22.dp)
+                                .size(24.dp)
                                 .clip(CircleShape)
                                 .background(if (isIncome) Color.White.copy(alpha = 0.22f) else MutedIncomeGreen.copy(alpha = 0.12f)),
                             contentAlignment = Alignment.Center
@@ -337,7 +329,7 @@ fun TransactionDialog(
                         Spacer(modifier = Modifier.width(6.dp))
                         Text(
                             text = if (isArabic) "دخل" else "Income",
-                            fontSize = 13.sp,
+                            fontSize = 13.5.sp,
                             fontWeight = if (isIncome) FontWeight.Bold else FontWeight.SemiBold,
                             color = if (isIncome) Color.White else TextPrimaryDark
                         )
@@ -348,15 +340,15 @@ fun TransactionDialog(
                     IconButton(
                         onClick = { showDeleteConfirmDialog = true },
                         modifier = Modifier
-                            .size(38.dp)
-                            .clip(RoundedCornerShape(11.dp))
+                            .size(40.dp)
+                            .clip(RoundedCornerShape(12.dp))
                             .background(MutedExpenseLight)
                     ) {
                         Icon(
                             imageVector = Icons.Default.Delete,
                             contentDescription = if (isArabic) "حذف" else "Delete",
                             tint = MutedExpenseTerracotta,
-                            modifier = Modifier.size(17.dp)
+                            modifier = Modifier.size(18.dp)
                         )
                     }
                 }
@@ -364,34 +356,34 @@ fun TransactionDialog(
                 IconButton(
                     onClick = onDismiss,
                     modifier = Modifier
-                        .size(38.dp)
-                        .clip(RoundedCornerShape(11.dp))
+                        .size(40.dp)
+                        .clip(RoundedCornerShape(12.dp))
                         .background(Color(0xFFF3F1EC))
                 ) {
                     Icon(
                         imageVector = Icons.Default.Close,
                         contentDescription = if (isArabic) "إغلاق" else "Close",
                         tint = TextPrimaryDark,
-                        modifier = Modifier.size(17.dp)
+                        modifier = Modifier.size(18.dp)
                     )
                 }
             }
 
-            Spacer(modifier = Modifier.height(10.dp))
+            Spacer(modifier = Modifier.height(12.dp))
 
-            // 2. Compact & Balanced Centered Amount Input Card
+            // 2. Refined Centered Amount Input Card
             val activeAccent = if (type == "EXPENSE") BurntOrangePrimary else MutedIncomeGreen
             Surface(
                 modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(16.dp),
+                shape = RoundedCornerShape(18.dp),
                 color = Color(0xFFFAF9F6),
-                border = BorderStroke(0.7.dp, activeAccent.copy(alpha = 0.22f)),
+                border = BorderStroke(1.dp, activeAccent.copy(alpha = 0.25f)),
                 shadowElevation = 0.dp
             ) {
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(vertical = 10.dp, horizontal = 14.dp)
+                        .padding(vertical = 12.dp, horizontal = 16.dp)
                 ) {
                     Column(
                         modifier = Modifier.fillMaxWidth(),
@@ -399,12 +391,12 @@ fun TransactionDialog(
                     ) {
                         Text(
                             text = if (isArabic) "المبلغ" else "Amount",
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.Medium,
+                            fontSize = 11.5.sp,
+                            fontWeight = FontWeight.SemiBold,
                             color = TextSecondaryBrown
                         )
 
-                        Spacer(modifier = Modifier.height(2.dp))
+                        Spacer(modifier = Modifier.height(4.dp))
 
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
@@ -424,7 +416,7 @@ fun TransactionDialog(
                                     .width(IntrinsicSize.Min)
                                     .widthIn(min = 68.dp, max = 220.dp),
                                 textStyle = TextStyle(
-                                    fontSize = 34.sp,
+                                    fontSize = 36.sp,
                                     fontWeight = FontWeight.ExtraBold,
                                     color = activeAccent,
                                     textAlign = TextAlign.Center
@@ -443,7 +435,7 @@ fun TransactionDialog(
                                         if (amountString.isEmpty()) {
                                             Text(
                                                 text = "0.00",
-                                                fontSize = 34.sp,
+                                                fontSize = 36.sp,
                                                 fontWeight = FontWeight.Bold,
                                                 color = TextMutedBrown.copy(alpha = 0.32f),
                                                 textAlign = TextAlign.Center
@@ -457,16 +449,16 @@ fun TransactionDialog(
                             Spacer(modifier = Modifier.width(8.dp))
 
                             Surface(
-                                shape = RoundedCornerShape(8.dp),
+                                shape = RoundedCornerShape(9.dp),
                                 color = activeAccent.copy(alpha = 0.12f),
-                                border = BorderStroke(0.7.dp, activeAccent.copy(alpha = 0.28f))
+                                border = BorderStroke(0.8.dp, activeAccent.copy(alpha = 0.28f))
                             ) {
                                 Text(
                                     text = currencySymbol,
                                     fontSize = 13.sp,
                                     fontWeight = FontWeight.Bold,
                                     color = activeAccent,
-                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
+                                    modifier = Modifier.padding(horizontal = 9.dp, vertical = 4.dp)
                                 )
                             }
                         }
@@ -477,7 +469,7 @@ fun TransactionDialog(
                             onClick = { amountString = "" },
                             modifier = Modifier
                                 .align(Alignment.CenterEnd)
-                                .size(26.dp)
+                                .size(28.dp)
                                 .clip(CircleShape)
                                 .background(Color(0xFFEDEAE2))
                         ) {
@@ -492,7 +484,7 @@ fun TransactionDialog(
                 }
             }
 
-            Spacer(modifier = Modifier.height(10.dp))
+            Spacer(modifier = Modifier.height(12.dp))
 
             // 3. Clean Category Header & Symmetrical 4-Column Category Grid
             Row(
@@ -504,20 +496,26 @@ fun TransactionDialog(
             ) {
                 Text(
                     text = if (isArabic) "الفئة" else "Category",
-                    fontSize = 13.sp,
+                    fontSize = 13.5.sp,
                     fontWeight = FontWeight.Bold,
                     color = TextPrimaryDark
                 )
 
-                Text(
-                    text = selectedCategory,
-                    fontSize = 11.5.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    color = activeAccent
-                )
+                Surface(
+                    shape = RoundedCornerShape(8.dp),
+                    color = activeAccent.copy(alpha = 0.1f)
+                ) {
+                    Text(
+                        text = selectedCategory,
+                        fontSize = 11.5.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = activeAccent,
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
+                    )
+                }
             }
 
-            Spacer(modifier = Modifier.height(6.dp))
+            Spacer(modifier = Modifier.height(8.dp))
 
             // Symmetrical 4-Column Grid (15 Expense + 1 Custom = 4x4; 7 Income + 1 Custom = 2x4)
             val gridColumns = 4
@@ -526,12 +524,12 @@ fun TransactionDialog(
 
             Column(
                 modifier = Modifier.fillMaxWidth(),
-                verticalArrangement = Arrangement.spacedBy(6.dp)
+                verticalArrangement = Arrangement.spacedBy(7.dp)
             ) {
                 for (rowIndex in 0 until rowsCount) {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        horizontalArrangement = Arrangement.spacedBy(7.dp)
                     ) {
                         for (colIndex in 0 until gridColumns) {
                             val itemIndex = rowIndex * gridColumns + colIndex
@@ -556,7 +554,7 @@ fun TransactionDialog(
                                     shadowElevation = 0.dp,
                                     modifier = Modifier
                                         .weight(1f)
-                                        .height(36.dp)
+                                        .height(38.dp)
                                         .clip(RoundedCornerShape(11.dp))
                                         .clickable { showCustomCategoryDialog = true }
                                 ) {
@@ -600,106 +598,74 @@ fun TransactionDialog(
                 }
             }
 
-            Spacer(modifier = Modifier.height(10.dp))
+            Spacer(modifier = Modifier.height(12.dp))
 
-            // 4. Compact Bill / Receipt Attachment Row
+            // 4. Single-Day Transaction Date Card
             Surface(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .clip(RoundedCornerShape(12.dp))
-                    .clickable {
-                        if (receiptUri == null) {
-                            photoPickerLauncher.launch(
-                                PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
-                            )
-                        }
-                    },
-                shape = RoundedCornerShape(12.dp),
-                color = if (receiptUri != null) MutedIncomeGreenLight.copy(alpha = 0.45f) else Color(0xFFFAF9F6),
-                border = BorderStroke(
-                    0.6.dp,
-                    if (receiptUri != null) MutedIncomeGreen.copy(alpha = 0.4f) else BorderSubtle
-                )
+                    .clip(RoundedCornerShape(14.dp))
+                    .clickable { showStartDatePicker = true },
+                shape = RoundedCornerShape(14.dp),
+                color = Color(0xFFFAF9F6),
+                border = BorderStroke(0.8.dp, BorderSubtle)
             ) {
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = 12.dp, vertical = 8.dp),
+                        .padding(horizontal = 14.dp, vertical = 12.dp),
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.weight(1f)
-                    ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
                         Box(
                             modifier = Modifier
                                 .size(28.dp)
                                 .clip(CircleShape)
-                                .background(
-                                    if (receiptUri != null) MutedIncomeGreen.copy(alpha = 0.18f)
-                                    else Color(0xFFEDEAE2)
-                                ),
+                                .background(BurntOrangePrimary.copy(alpha = 0.12f)),
                             contentAlignment = Alignment.Center
                         ) {
                             Icon(
-                                imageVector = Icons.Default.ReceiptLong,
+                                imageVector = Icons.Default.CalendarMonth,
                                 contentDescription = null,
-                                tint = if (receiptUri != null) MutedIncomeGreen else TextSecondaryBrown,
+                                tint = BurntOrangePrimary,
                                 modifier = Modifier.size(15.dp)
                             )
                         }
                         Spacer(modifier = Modifier.width(8.dp))
                         Text(
-                            text = if (receiptUri != null) {
-                                if (isArabic) "فاتورة مرفقة • اضغط للتغيير" else "Bill attached • Tap to change"
-                            } else {
-                                if (isArabic) "إرفاق صورة الفاتورة" else "Attach bill photo"
-                            },
-                            fontSize = 12.sp,
-                            fontWeight = if (receiptUri != null) FontWeight.Bold else FontWeight.Medium,
-                            color = if (receiptUri != null) MutedIncomeGreen else TextPrimaryDark
+                            text = if (isArabic) "التاريخ" else "Date",
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = TextPrimaryDark
                         )
                     }
 
-                    if (receiptUri != null) {
-                        IconButton(
-                            onClick = {
-                                receiptUri = null
-                                receiptMimeType = null
-                            },
-                            modifier = Modifier
-                                .size(24.dp)
-                                .clip(CircleShape)
-                                .background(Color.White)
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Close,
-                                contentDescription = if (isArabic) "إزالة" else "Remove",
-                                tint = MutedExpenseTerracotta,
-                                modifier = Modifier.size(13.dp)
-                            )
-                        }
-                    } else {
-                        Icon(
-                            imageVector = Icons.Default.AttachFile,
-                            contentDescription = null,
-                            tint = TextSecondaryBrown,
-                            modifier = Modifier.size(16.dp)
+                    Surface(
+                        shape = RoundedCornerShape(9.dp),
+                        color = Color.White,
+                        border = BorderStroke(0.7.dp, BorderSubtle)
+                    ) {
+                        Text(
+                            text = Formatters.formatDate(startDateMillis, isArabic),
+                            fontSize = 12.5.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = TextPrimaryDark,
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
                         )
                     }
                 }
             }
 
-            Spacer(modifier = Modifier.height(10.dp))
+            Spacer(modifier = Modifier.height(14.dp))
 
             // 5. Save Button
             val buttonColor = if (type == "EXPENSE") BurntOrangePrimary else MutedIncomeGreen
             Surface(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(44.dp)
-                    .clip(RoundedCornerShape(12.dp))
+                    .height(48.dp)
+                    .clip(RoundedCornerShape(14.dp))
                     .clickable(enabled = isSaveEnabled) {
                         onSave(
                             initialTransaction?.id ?: 0L,
@@ -707,19 +673,19 @@ fun TransactionDialog(
                             parsedAmount,
                             selectedCategory.trim(),
                             "",
-                            selectedDateMillis,
+                            startDateMillis,
                             null,
                             notes.trim(),
                             isPinned,
-                            receiptUri,
-                            receiptMimeType
+                            null,
+                            null
                         )
                     }
                     .testTag("save_transaction_button"),
-                shape = RoundedCornerShape(12.dp),
+                shape = RoundedCornerShape(14.dp),
                 color = if (isSaveEnabled) buttonColor else Color(0xFFF3F1EC),
-                border = BorderStroke(0.6.dp, if (isSaveEnabled) buttonColor else BorderSubtle),
-                shadowElevation = 0.dp
+                border = BorderStroke(0.8.dp, if (isSaveEnabled) buttonColor else BorderSubtle),
+                shadowElevation = if (isSaveEnabled) 1.dp else 0.dp
             ) {
                 Row(
                     modifier = Modifier.fillMaxSize(),
@@ -729,7 +695,7 @@ fun TransactionDialog(
                     if (isSaveEnabled) {
                         Box(
                             modifier = Modifier
-                                .size(22.dp)
+                                .size(24.dp)
                                 .clip(CircleShape)
                                 .background(Color.White.copy(alpha = 0.22f)),
                             contentAlignment = Alignment.Center
@@ -738,28 +704,58 @@ fun TransactionDialog(
                                 imageVector = if (initialTransaction != null) Icons.Default.Edit else Icons.Default.Add,
                                 contentDescription = null,
                                 tint = Color.White,
-                                modifier = Modifier.size(13.dp)
+                                modifier = Modifier.size(14.dp)
                             )
                         }
-                        Spacer(modifier = Modifier.width(6.dp))
+                        Spacer(modifier = Modifier.width(8.dp))
                     }
                     Text(
                         text = if (initialTransaction != null) {
-                            if (isArabic) "تحديث" else "Update"
+                            if (isArabic) "تحديث العملية" else "Update Entry"
                         } else if (isSaveEnabled) {
                             val formatted = Formatters.formatMoney(parsedAmount)
                             if (isArabic) "حفظ • $formatted $currencySymbol" else "Save • $formatted $currencySymbol"
                         } else {
                             if (isArabic) "حدد المبلغ" else "Set amount"
                         },
-                        fontSize = 13.5.sp,
+                        fontSize = 14.sp,
                         fontWeight = if (isSaveEnabled) FontWeight.Bold else FontWeight.Medium,
                         color = if (isSaveEnabled) Color.White else TextSecondaryBrown
                     )
                 }
             }
 
-            Spacer(modifier = Modifier.height(6.dp))
+            Spacer(modifier = Modifier.height(10.dp))
+        }
+    }
+
+    // Start Date Picker Dialog
+    if (showStartDatePicker) {
+        val initialUtc = remember(startDateMillis) {
+            DateFilterUtils.localMillisToUtcMidnight(startDateMillis)
+        }
+        val datePickerState = rememberDatePickerState(initialSelectedDateMillis = initialUtc)
+        DatePickerDialog(
+            onDismissRequest = { showStartDatePicker = false },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        datePickerState.selectedDateMillis?.let { utc ->
+                            startDateMillis = DateFilterUtils.utcMillisToLocalStartOfDay(utc)
+                        }
+                        showStartDatePicker = false
+                    }
+                ) {
+                    Text(if (isArabic) "تأكيد" else "Confirm", color = BurntOrangePrimary, fontWeight = FontWeight.Bold)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showStartDatePicker = false }) {
+                    Text(if (isArabic) "إلغاء" else "Cancel", color = TextSecondaryBrown)
+                }
+            }
+        ) {
+            DatePicker(state = datePickerState)
         }
     }
 

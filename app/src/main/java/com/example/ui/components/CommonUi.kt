@@ -1,13 +1,16 @@
 package com.example.ui.components
 
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -18,12 +21,30 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowDownward
 import androidx.compose.material.icons.filled.ArrowUpward
+import androidx.compose.material.icons.filled.CalendarMonth
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.PushPin
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.DatePicker
+import androidx.compose.material3.DatePickerDialog
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.rememberDatePickerState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableLongStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -96,12 +117,14 @@ object Formatters {
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun TransactionRowItem(
     transaction: TransactionEntity,
     currencySymbol: String,
     isArabic: Boolean,
     onClick: () -> Unit,
+    onQuickChangeDate: ((TransactionEntity) -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     val isIncome = transaction.type == "INCOME"
@@ -110,11 +133,22 @@ fun TransactionRowItem(
     val categoryIcon = FinancialConstants.getCategoryIcon(transaction.category)
     val categoryColor = FinancialConstants.getCategoryColor(transaction.category)
 
+    var showMenu by remember { mutableStateOf(false) }
+
     Surface(
         modifier = modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(18.dp))
-            .clickable { onClick() }
+            .combinedClickable(
+                onClick = { onClick() },
+                onLongClick = {
+                    if (onQuickChangeDate != null) {
+                        onQuickChangeDate(transaction)
+                    } else {
+                        showMenu = true
+                    }
+                }
+            )
             .testTag("transaction_item_${transaction.id}"),
         color = MaterialTheme.colorScheme.surface,
         shape = RoundedCornerShape(18.dp),
@@ -169,14 +203,14 @@ fun TransactionRowItem(
                 Spacer(modifier = Modifier.height(3.dp))
 
                 Text(
-                    text = Formatters.formatDateRange(transaction.dateMillis, transaction.endDateMillis, isArabic),
+                    text = Formatters.formatDate(transaction.dateMillis, isArabic),
                     style = MaterialTheme.typography.bodySmall,
                     color = TextSecondaryBrown,
                     fontSize = 11.5.sp
                 )
             }
 
-            Spacer(modifier = Modifier.width(8.dp))
+            Spacer(modifier = Modifier.width(6.dp))
 
             // Amount pill with soft tinted background
             Surface(
@@ -189,10 +223,239 @@ fun TransactionRowItem(
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold,
                     color = amountColor,
-                    fontSize = 13.sp,
-                    modifier = Modifier.padding(horizontal = 9.dp, vertical = 5.dp)
+                    fontSize = 12.5.sp,
+                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
                 )
             }
+
+            // Quick overflow options button (⋮)
+            Box {
+                IconButton(
+                    onClick = { showMenu = true },
+                    modifier = Modifier.size(32.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.MoreVert,
+                        contentDescription = if (isArabic) "خيارات إضافية" else "Options",
+                        tint = TextSecondaryBrown,
+                        modifier = Modifier.size(17.dp)
+                    )
+                }
+
+                DropdownMenu(
+                    expanded = showMenu,
+                    onDismissRequest = { showMenu = false }
+                ) {
+                    DropdownMenuItem(
+                        text = {
+                            Text(
+                                text = if (isArabic) "تغيير التاريخ" else "Change Date",
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.Medium
+                            )
+                        },
+                        leadingIcon = {
+                            Icon(
+                                imageVector = Icons.Default.CalendarMonth,
+                                contentDescription = null,
+                                tint = BurntOrangePrimary,
+                                modifier = Modifier.size(18.dp)
+                            )
+                        },
+                        onClick = {
+                            showMenu = false
+                            onQuickChangeDate?.invoke(transaction)
+                        }
+                    )
+                    DropdownMenuItem(
+                        text = {
+                            Text(
+                                text = if (isArabic) "تعديل العملية" else "Edit Transaction",
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.Medium
+                            )
+                        },
+                        leadingIcon = {
+                            Icon(
+                                imageVector = Icons.Default.Edit,
+                                contentDescription = null,
+                                tint = TextSecondaryBrown,
+                                modifier = Modifier.size(18.dp)
+                            )
+                        },
+                        onClick = {
+                            showMenu = false
+                            onClick()
+                        }
+                    )
+                }
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun QuickChangeDateDialog(
+    transaction: TransactionEntity,
+    isArabic: Boolean,
+    currencySymbol: String,
+    onDismiss: () -> Unit,
+    onConfirm: (newDateMillis: Long) -> Unit
+) {
+    var selectedDateMillis by remember { mutableLongStateOf(transaction.dateMillis) }
+    var showDatePicker by remember { mutableStateOf(false) }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Box(
+                    modifier = Modifier
+                        .size(32.dp)
+                        .clip(CircleShape)
+                        .background(BurntOrangePrimary.copy(alpha = 0.12f)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.CalendarMonth,
+                        contentDescription = null,
+                        tint = BurntOrangePrimary,
+                        modifier = Modifier.size(18.dp)
+                    )
+                }
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(
+                    text = if (isArabic) "تغيير التاريخ" else "Change Date",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = TextPrimaryDark
+                )
+            }
+        },
+        text = {
+            Column(modifier = Modifier.fillMaxWidth()) {
+                // Transaction preview row
+                Surface(
+                    shape = RoundedCornerShape(12.dp),
+                    color = WarmCardSurface,
+                    border = androidx.compose.foundation.BorderStroke(0.6.dp, BorderSubtle),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Text(
+                            text = FinancialConstants.normalizeCategoryName(transaction.category),
+                            fontWeight = FontWeight.SemiBold,
+                            fontSize = 13.sp,
+                            color = TextPrimaryDark
+                        )
+                        Text(
+                            text = "${Formatters.formatMoney(transaction.amount)} $currencySymbol",
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 13.sp,
+                            color = if (transaction.type == "INCOME") MutedIncomeGreen else MutedExpenseTerracotta
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(14.dp))
+
+                Text(
+                    text = if (isArabic) "اختر التاريخ:" else "Select date:",
+                    fontSize = 11.5.sp,
+                    fontWeight = FontWeight.Medium,
+                    color = TextSecondaryBrown
+                )
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                // Single Date Picker Row
+                Surface(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(44.dp)
+                        .clip(RoundedCornerShape(10.dp))
+                        .clickable { showDatePicker = true },
+                    shape = RoundedCornerShape(10.dp),
+                    color = Color.White,
+                    border = androidx.compose.foundation.BorderStroke(0.8.dp, BorderSubtle)
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(horizontal = 12.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Text(
+                            text = if (isArabic) "التاريخ:" else "Date:",
+                            fontSize = 12.sp,
+                            color = TextSecondaryBrown
+                        )
+                        Text(
+                            text = Formatters.formatDate(selectedDateMillis, isArabic),
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = TextPrimaryDark
+                        )
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(
+                onClick = {
+                    onConfirm(selectedDateMillis)
+                    onDismiss()
+                }
+            ) {
+                Text(
+                    text = if (isArabic) "حفظ التغيير" else "Save Change",
+                    color = BurntOrangePrimary,
+                    fontWeight = FontWeight.Bold
+                )
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text(
+                    text = if (isArabic) "إلغاء" else "Cancel",
+                    color = TextSecondaryBrown
+                )
+            }
+        }
+    )
+
+    if (showDatePicker) {
+        val initialUtc = remember(selectedDateMillis) {
+            DateFilterUtils.localMillisToUtcMidnight(selectedDateMillis)
+        }
+        val datePickerState = rememberDatePickerState(initialSelectedDateMillis = initialUtc)
+        DatePickerDialog(
+            onDismissRequest = { showDatePicker = false },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        datePickerState.selectedDateMillis?.let { utc ->
+                            selectedDateMillis = DateFilterUtils.utcMillisToLocalStartOfDay(utc)
+                        }
+                        showDatePicker = false
+                    }
+                ) {
+                    Text(if (isArabic) "تأكيد" else "Confirm", color = BurntOrangePrimary, fontWeight = FontWeight.Bold)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDatePicker = false }) {
+                    Text(if (isArabic) "إلغاء" else "Cancel", color = TextSecondaryBrown)
+                }
+            }
+        ) {
+            DatePicker(state = datePickerState)
         }
     }
 }
@@ -279,5 +542,3 @@ fun EmptyStateView(
         }
     }
 }
-
-

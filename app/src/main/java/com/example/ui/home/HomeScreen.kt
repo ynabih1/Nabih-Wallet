@@ -27,9 +27,9 @@ import androidx.compose.material.icons.filled.AccountBalanceWallet
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ArrowDownward
 import androidx.compose.material.icons.filled.ArrowUpward
+import androidx.compose.material.icons.filled.CalendarToday
 import androidx.compose.material.icons.filled.Handshake
 import androidx.compose.material.icons.filled.NorthEast
-import androidx.compose.material.icons.filled.NotificationsNone
 import androidx.compose.material.icons.filled.ReceiptLong
 import androidx.compose.material.icons.filled.Savings
 import androidx.compose.material.icons.filled.SouthWest
@@ -50,7 +50,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
@@ -64,8 +63,6 @@ import com.example.ui.WalletViewModel
 import com.example.ui.components.EmptyStateView
 import com.example.ui.components.Formatters
 import com.example.ui.components.TransactionRowItem
-import com.example.ui.notifications.NotificationCenterDialog
-import com.example.ui.settings.BudgetSettingDialog
 import com.example.ui.theme.*
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -84,30 +81,12 @@ fun HomeScreen(
     val totalBalance by viewModel.totalBalance.collectAsStateWithLifecycle()
     val totalIncome by viewModel.totalIncome.collectAsStateWithLifecycle()
     val totalExpense by viewModel.totalExpense.collectAsStateWithLifecycle()
-    val totalOwedToMe by viewModel.totalOwedToMe.collectAsStateWithLifecycle()
-    val totalIOwe by viewModel.totalIOwe.collectAsStateWithLifecycle()
     val recentTransactions by viewModel.recentTransactions.collectAsStateWithLifecycle()
-    val monthlyBudgetStatus by viewModel.monthlyBudgetStatus.collectAsStateWithLifecycle()
     val language by viewModel.language.collectAsStateWithLifecycle()
-    val smartNotifications by viewModel.smartNotifications.collectAsStateWithLifecycle()
-    val unreadNotificationCount by viewModel.unreadNotificationCount.collectAsStateWithLifecycle()
-    val isNotificationsEnabled by viewModel.isNotificationsEnabled.collectAsStateWithLifecycle()
-    val isDebtAlertEnabled by viewModel.isDebtAlertEnabled.collectAsStateWithLifecycle()
-    val isDailyReminderEnabled by viewModel.isDailyReminderEnabled.collectAsStateWithLifecycle()
     val currencySymbol = viewModel.getCurrencySymbol()
     val isArabic = language == "ar"
-    val context = LocalContext.current
 
-    var showBudgetDialog by remember { mutableStateOf(false) }
-    var showNotificationsDialog by remember { mutableStateOf(false) }
-
-    val notificationPermissionLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
-        contract = androidx.activity.result.contract.ActivityResultContracts.RequestPermission()
-    ) { isGranted ->
-        if (isGranted) {
-            viewModel.onNotificationPermissionGranted()
-        }
-    }
+    var transactionForDateChange by remember { mutableStateOf<TransactionEntity?>(null) }
 
     LazyColumn(
         modifier = modifier
@@ -115,76 +94,46 @@ fun HomeScreen(
             .padding(horizontal = 16.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        // 1. Top Header: Logo, App Name & Notification Bell
+        // 1. Top Header: Brand Identity
         item {
             Spacer(modifier = Modifier.height(8.dp))
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                Box(
+                    modifier = Modifier
+                        .size(42.dp)
+                        .clip(RoundedCornerShape(13.dp))
+                        .background(BurntOrangePrimary.copy(alpha = 0.14f)),
+                    contentAlignment = Alignment.Center
                 ) {
                     Icon(
                         imageVector = Icons.Default.AccountBalanceWallet,
                         contentDescription = "شعار التطبيق",
                         tint = BurntOrangePrimary,
-                        modifier = Modifier.size(32.dp)
-                    )
-                    Text(
-                        text = stringResource(R.string.app_name),
-                        style = MaterialTheme.typography.headlineMedium,
-                        fontWeight = FontWeight.Bold,
-                        color = TextPrimaryDark
+                        modifier = Modifier.size(24.dp)
                     )
                 }
-
-                // Notification Bell Button with badge
-                Box {
-                    IconButton(
-                        onClick = { showNotificationsDialog = true },
-                        modifier = Modifier.testTag("notifications_button")
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.NotificationsNone,
-                            contentDescription = "التنبيهات والإشعارات",
-                            tint = TextPrimaryDark,
-                            modifier = Modifier.size(26.dp)
-                        )
-                    }
-
-                    if (isNotificationsEnabled && unreadNotificationCount > 0) {
-                        Box(
-                            modifier = Modifier
-                                .align(Alignment.TopEnd)
-                                .offset(x = (-4).dp, y = 4.dp)
-                                .size(16.dp)
-                                .clip(CircleShape)
-                                .background(BurntOrangePrimary),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Text(
-                                text = if (unreadNotificationCount > 9) "9+" else "$unreadNotificationCount",
-                                color = Color.White,
-                                fontSize = 9.sp,
-                                fontWeight = FontWeight.Bold
-                            )
-                        }
-                    }
-                }
+                Text(
+                    text = stringResource(R.string.app_name),
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.ExtraBold,
+                    color = TextPrimaryDark
+                )
             }
         }
 
-        // 2. Total Balance Card
+        // 2. Total Balance Card with Elevated Sub-Cards for Income & Expense
         item {
             Surface(
                 modifier = Modifier
                     .fillMaxWidth()
                     .testTag("total_balance_card"),
-                shape = RoundedCornerShape(20.dp),
-                color = DarkOliveCard
+                shape = RoundedCornerShape(24.dp),
+                color = DarkOliveCard,
+                shadowElevation = 2.dp
             ) {
                 Column(
                     modifier = Modifier
@@ -200,56 +149,103 @@ fun HomeScreen(
                     Text(
                         text = "${Formatters.formatMoney(totalBalance)} $currencySymbol",
                         style = MaterialTheme.typography.headlineLarge,
-                        fontWeight = FontWeight.Bold,
+                        fontWeight = FontWeight.ExtraBold,
                         color = Color.White
                     )
-                    Spacer(modifier = Modifier.height(16.dp))
+                    Spacer(modifier = Modifier.height(18.dp))
                     Row(
                         modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
-                        Column {
-                            Text(
-                                text = stringResource(R.string.income),
-                                style = MaterialTheme.typography.bodySmall,
-                                color = TextOnDarkSecondary
-                            )
-                            Text(
-                                text = "+${Formatters.formatMoney(totalIncome)}",
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.Bold,
-                                color = MutedIncomeGreenLight
-                            )
+                        // Income Summary Box
+                        Surface(
+                            modifier = Modifier.weight(1f),
+                            shape = RoundedCornerShape(14.dp),
+                            color = Color.White.copy(alpha = 0.08f)
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(30.dp)
+                                        .clip(CircleShape)
+                                        .background(MutedIncomeGreenLight.copy(alpha = 0.2f)),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.ArrowUpward,
+                                        contentDescription = null,
+                                        tint = MutedIncomeGreenLight,
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                }
+                                Column {
+                                    Text(
+                                        text = stringResource(R.string.income),
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = TextOnDarkSecondary,
+                                        fontSize = 11.sp
+                                    )
+                                    Text(
+                                        text = "+${Formatters.formatMoney(totalIncome)}",
+                                        style = MaterialTheme.typography.titleSmall,
+                                        fontWeight = FontWeight.Bold,
+                                        color = MutedIncomeGreenLight
+                                    )
+                                }
+                            }
                         }
-                        Column {
-                            Text(
-                                text = stringResource(R.string.expense),
-                                style = MaterialTheme.typography.bodySmall,
-                                color = TextOnDarkSecondary
-                            )
-                            Text(
-                                text = "-${Formatters.formatMoney(totalExpense)}",
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.Bold,
-                                color = MutedExpenseLight
-                            )
+
+                        // Expense Summary Box
+                        Surface(
+                            modifier = Modifier.weight(1f),
+                            shape = RoundedCornerShape(14.dp),
+                            color = Color.White.copy(alpha = 0.08f)
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(30.dp)
+                                        .clip(CircleShape)
+                                        .background(MutedExpenseLight.copy(alpha = 0.2f)),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.ArrowDownward,
+                                        contentDescription = null,
+                                        tint = MutedExpenseLight,
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                }
+                                Column {
+                                    Text(
+                                        text = stringResource(R.string.expense),
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = TextOnDarkSecondary,
+                                        fontSize = 11.sp
+                                    )
+                                    Text(
+                                        text = "-${Formatters.formatMoney(totalExpense)}",
+                                        style = MaterialTheme.typography.titleSmall,
+                                        fontWeight = FontWeight.Bold,
+                                        color = MutedExpenseLight
+                                    )
+                                }
+                            }
                         }
                     }
                 }
             }
         }
 
-        // 4. Monthly Budget & Alert Card
-        item {
-            MonthlyBudgetCard(
-                budgetStatus = monthlyBudgetStatus,
-                currencySymbol = currencySymbol,
-                isArabic = isArabic,
-                onOpenBudgetDialog = { showBudgetDialog = true }
-            )
-        }
-
-        // 5. Section Header: Recent transactions + See all pill
+        // 3. Section Header: Recent transactions + See all pill
         item {
             Row(
                 modifier = Modifier
@@ -294,7 +290,7 @@ fun HomeScreen(
             }
         }
 
-        // 7. Recent Transactions List
+        // 5. Recent Transactions List
         if (recentTransactions.isEmpty()) {
             item {
                 EmptyStateView(
@@ -312,7 +308,8 @@ fun HomeScreen(
                     transaction = tx,
                     currencySymbol = currencySymbol,
                     isArabic = isArabic,
-                    onClick = { onEditTransaction(tx) }
+                    onClick = { onEditTransaction(tx) },
+                    onQuickChangeDate = { transactionForDateChange = it }
                 )
             }
         }
@@ -322,42 +319,14 @@ fun HomeScreen(
         }
     }
 
-    if (showNotificationsDialog) {
-        NotificationCenterDialog(
-            notifications = smartNotifications,
-            isNotificationsEnabled = isNotificationsEnabled,
-            isBudgetAlertEnabled = monthlyBudgetStatus.isAlertEnabled,
-            isDebtAlertEnabled = isDebtAlertEnabled,
-            isDailyReminderEnabled = isDailyReminderEnabled,
+    transactionForDateChange?.let { tx ->
+        com.example.ui.components.QuickChangeDateDialog(
+            transaction = tx,
             isArabic = isArabic,
-            onDismiss = { showNotificationsDialog = false },
-            onToggleNotifications = { enabled ->
-                viewModel.setNotificationsEnabled(enabled)
-                if (enabled && android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU &&
-                    !com.example.notification.NotificationHelper.hasNotificationPermission(context)
-                ) {
-                    notificationPermissionLauncher.launch(android.Manifest.permission.POST_NOTIFICATIONS)
-                }
-            },
-            onToggleBudgetAlerts = { viewModel.setBudgetAlertEnabled(it) },
-            onToggleDebtAlerts = { viewModel.setDebtAlertEnabled(it) },
-            onToggleDailyReminder = { viewModel.setDailyReminderEnabled(it) },
-            onNavigateToBudget = { showBudgetDialog = true },
-            onNavigateToDebts = { onNavigateToDebts(DebtFilter.ALL) }
-        )
-    }
-
-    if (showBudgetDialog) {
-        BudgetSettingDialog(
-            currentBudget = monthlyBudgetStatus.budgetAmount,
             currencySymbol = currencySymbol,
-            isArabic = isArabic,
-            onDismiss = { showBudgetDialog = false },
-            onSaveBudget = { amount ->
-                viewModel.setMonthlyBudget(amount)
-            },
-            onClearBudget = {
-                viewModel.setMonthlyBudget(0.0)
+            onDismiss = { transactionForDateChange = null },
+            onConfirm = { newDate ->
+                viewModel.updateTransactionDate(tx, newDate)
             }
         )
     }

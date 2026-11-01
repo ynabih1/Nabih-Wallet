@@ -142,27 +142,8 @@ fun NabihApp(
         }
     }
 
-    val isNotificationsEnabled by viewModel.isNotificationsEnabled.collectAsStateWithLifecycle()
     val context = LocalContext.current
     val registryOwner = androidx.activity.compose.LocalActivityResultRegistryOwner.current
-
-    val notificationPermissionLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
-        contract = androidx.activity.result.contract.ActivityResultContracts.RequestPermission()
-    ) { isGranted ->
-        if (isGranted) {
-            viewModel.onNotificationPermissionGranted()
-        }
-    }
-
-    LaunchedEffect(isNotificationsEnabled) {
-        if (isNotificationsEnabled && android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
-            if (!com.example.notification.NotificationHelper.hasNotificationPermission(context)) {
-                notificationPermissionLauncher.launch(android.Manifest.permission.POST_NOTIFICATIONS)
-            } else {
-                viewModel.onNotificationPermissionGranted()
-            }
-        }
-    }
 
     val localizedContext = remember(language, context) {
         val locale = Locale(language)
@@ -204,8 +185,13 @@ fun NabihApp(
                             }
                         },
                         onFabClick = {
-                            transactionToEdit = null
-                            showTransactionDialog = true
+                            if (currentRoute == NabihDestinations.DEBTS) {
+                                debtToEdit = null
+                                showDebtDialog = true
+                            } else {
+                                transactionToEdit = null
+                                showTransactionDialog = true
+                            }
                         }
                     )
                 }

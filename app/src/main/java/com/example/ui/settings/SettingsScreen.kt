@@ -38,7 +38,6 @@ import androidx.compose.material.icons.filled.DeleteOutline
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Lock
-import androidx.compose.material.icons.filled.NotificationsActive
 import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.Password
 import androidx.compose.material.icons.filled.Refresh
@@ -106,9 +105,6 @@ fun SettingsScreen(
     modifier: Modifier = Modifier
 ) {
     val language by viewModel.language.collectAsStateWithLifecycle()
-    val isNotificationsEnabled by viewModel.isNotificationsEnabled.collectAsStateWithLifecycle()
-    val isDebtAlertEnabled by viewModel.isDebtAlertEnabled.collectAsStateWithLifecycle()
-    val isDailyReminderEnabled by viewModel.isDailyReminderEnabled.collectAsStateWithLifecycle()
     val isBackingUp by viewModel.isBackingUp.collectAsStateWithLifecycle()
     val isRestoring by viewModel.isRestoring.collectAsStateWithLifecycle()
     val customCategories by viewModel.customCategories.collectAsStateWithLifecycle()
@@ -133,29 +129,29 @@ fun SettingsScreen(
 
     val isArabic = language == "ar"
 
-    val notificationPermissionLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.RequestPermission()
-    ) { isGranted ->
-        if (isGranted) {
-            viewModel.onNotificationPermissionGranted()
-        }
-    }
-
     val pickBackupLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.OpenDocument()
     ) { uri ->
         if (uri != null) {
-            val result = viewModel.validateBackupFile(context, uri)
-            result.fold(
+            viewModel.validateBackupFileAsync(
+                uri = uri,
                 onSuccess = { pkg ->
                     pendingRestorePackage = pkg
                     showRestoreConfirmDialog = true
                 },
-                onFailure = { err ->
-                    restoreErrorMessage = err.localizedMessage ?: if (isArabic) "ملف النسخة الاحتياطية غير صالح أو تالف" else "Invalid backup file"
+                onFailure = { msg ->
+                    restoreErrorMessage = msg
                     showRestoreErrorDialog = true
                 }
             )
+        }
+    }
+
+    val saveBackupDocumentLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.CreateDocument("application/json")
+    ) { uri ->
+        if (uri != null) {
+            viewModel.exportBackupToUri(uri)
         }
     }
 
@@ -216,139 +212,7 @@ fun SettingsScreen(
             }
         }
 
-        // 2. Notifications Card (الإشعارات والتنبيهات)
-        item {
-            SettingsSectionCard(
-                title = if (isArabic) "الإشعارات والتنبيهات" else "Notifications & Alerts",
-                icon = Icons.Default.NotificationsActive
-            ) {
-                Column(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalArrangement = Arrangement.spacedBy(14.dp)
-                ) {
-                    // Master Notifications Switch
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(
-                                text = if (isArabic) "تفعيل التنبيهات والإشعارات" else "Enable Notifications",
-                                style = MaterialTheme.typography.bodyLarge,
-                                fontWeight = FontWeight.SemiBold,
-                                color = TextPrimaryDark
-                            )
-                            Spacer(modifier = Modifier.height(2.dp))
-                            Text(
-                                text = if (isArabic) "استقبال إشعارات وتنبيهات النظام ومتابعة الحالة المالية" else "Receive system notifications and track financial status",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = TextSecondaryBrown
-                            )
-                        }
-
-                        Switch(
-                            checked = isNotificationsEnabled,
-                            onCheckedChange = { enabled ->
-                                viewModel.setNotificationsEnabled(enabled)
-                                if (enabled && android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU &&
-                                    !com.example.notification.NotificationHelper.hasNotificationPermission(context)
-                                ) {
-                                    notificationPermissionLauncher.launch(android.Manifest.permission.POST_NOTIFICATIONS)
-                                }
-                            },
-                            colors = SwitchDefaults.colors(
-                                checkedThumbColor = Color.White,
-                                checkedTrackColor = BurntOrangePrimary,
-                                uncheckedThumbColor = TextSecondaryBrown,
-                                uncheckedTrackColor = BorderSubtle
-                            ),
-                            modifier = Modifier.testTag("settings_master_notifications_switch")
-                        )
-                    }
-
-                    AnimatedVisibility(visible = isNotificationsEnabled) {
-                        Column(
-                            modifier = Modifier.fillMaxWidth(),
-                            verticalArrangement = Arrangement.spacedBy(12.dp)
-                        ) {
-                            HorizontalDivider(
-                                color = BorderSubtle.copy(alpha = 0.5f),
-                                thickness = 0.8.dp
-                            )
-
-                            // Debt Reminders
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Column(modifier = Modifier.weight(1f)) {
-                                    Text(
-                                        text = if (isArabic) "تذكيرات الديون المستحقة" else "Debt Reminders",
-                                        style = MaterialTheme.typography.bodyMedium,
-                                        fontWeight = FontWeight.SemiBold,
-                                        color = TextPrimaryDark
-                                    )
-                                    Spacer(modifier = Modifier.height(2.dp))
-                                    Text(
-                                        text = if (isArabic) "تنبيه بالمبالغ والديون المستحقة للسداد أو التحصيل" else "Alert for due receivables and payables",
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = TextSecondaryBrown
-                                    )
-                                }
-
-                                Switch(
-                                    checked = isDebtAlertEnabled,
-                                    onCheckedChange = { viewModel.setDebtAlertEnabled(it) },
-                                    colors = SwitchDefaults.colors(
-                                        checkedThumbColor = Color.White,
-                                        checkedTrackColor = BurntOrangePrimary,
-                                        uncheckedThumbColor = TextSecondaryBrown,
-                                        uncheckedTrackColor = BorderSubtle
-                                    )
-                                )
-                            }
-
-                            // Daily Log Reminder
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Column(modifier = Modifier.weight(1f)) {
-                                    Text(
-                                        text = if (isArabic) "تذكير التسجيل اليومي" else "Daily Reminder",
-                                        style = MaterialTheme.typography.bodyMedium,
-                                        fontWeight = FontWeight.SemiBold,
-                                        color = TextPrimaryDark
-                                    )
-                                    Spacer(modifier = Modifier.height(2.dp))
-                                    Text(
-                                        text = if (isArabic) "تذكير يومي لتسجيل المصروفات والحفاظ على الدقة" else "Daily reminder to log daily expenses and maintain accuracy",
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = TextSecondaryBrown
-                                    )
-                                }
-
-                                Switch(
-                                    checked = isDailyReminderEnabled,
-                                    onCheckedChange = { viewModel.setDailyReminderEnabled(it) },
-                                    colors = SwitchDefaults.colors(
-                                        checkedThumbColor = Color.White,
-                                        checkedTrackColor = BurntOrangePrimary,
-                                        uncheckedThumbColor = TextSecondaryBrown,
-                                        uncheckedTrackColor = BorderSubtle
-                                    )
-                                )
-                            }
-                        }
-                    }
-                }
-            }
-        }
-
-        // 4. Backup & Restore Card (النسخ الاحتياطي)
+        // 2. Backup & Restore Card (النسخ الاحتياطي)
         item {
             SettingsSectionCard(
                 title = if (isArabic) "النسخ الاحتياطي" else "Backup & Restore",
@@ -372,8 +236,8 @@ fun SettingsScreen(
                     ) {
                         Box(
                             modifier = Modifier
-                                .size(40.dp)
-                                .clip(RoundedCornerShape(10.dp))
+                                .size(42.dp)
+                                .clip(RoundedCornerShape(12.dp))
                                 .background(BurntOrangePrimary),
                             contentAlignment = Alignment.Center
                         ) {
@@ -395,13 +259,36 @@ fun SettingsScreen(
 
                         Spacer(modifier = Modifier.width(12.dp))
 
-                        Text(
-                            text = if (isArabic) "تصدير نسخة احتياطية" else "Export Backup",
-                            style = MaterialTheme.typography.bodyLarge,
-                            fontWeight = FontWeight.SemiBold,
-                            color = TextPrimaryDark,
-                            modifier = Modifier.weight(1f)
-                        )
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = if (isArabic) "تصدير نسخة احتياطية" else "Export Backup",
+                                style = MaterialTheme.typography.bodyLarge,
+                                fontWeight = FontWeight.SemiBold,
+                                color = TextPrimaryDark
+                            )
+                            Text(
+                                text = if (isArabic) "حفظ نسخة من معاملاتك وديونك على الجهاز" else "Save a copy of your transactions and debts",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = TextSecondaryBrown,
+                                fontSize = 11.5.sp
+                            )
+                        }
+
+                        TextButton(
+                            enabled = !isBackingUp && !isRestoring,
+                            onClick = {
+                                val sdf = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US)
+                                val fileName = "Nabih_Wallet_Backup_${sdf.format(java.util.Date())}.json"
+                                saveBackupDocumentLauncher.launch(fileName)
+                            }
+                        ) {
+                            Text(
+                                text = if (isArabic) "حفظ كملف" else "Save as",
+                                fontSize = 11.5.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = BurntOrangePrimary
+                            )
+                        }
                     }
                 }
 
@@ -428,8 +315,8 @@ fun SettingsScreen(
                     ) {
                         Box(
                             modifier = Modifier
-                                .size(40.dp)
-                                .clip(RoundedCornerShape(10.dp))
+                                .size(42.dp)
+                                .clip(RoundedCornerShape(12.dp))
                                 .background(Color(0xFF4A5568)),
                             contentAlignment = Alignment.Center
                         ) {
@@ -451,19 +338,26 @@ fun SettingsScreen(
 
                         Spacer(modifier = Modifier.width(12.dp))
 
-                        Text(
-                            text = if (isArabic) "استعادة نسخة احتياطية" else "Restore Backup",
-                            style = MaterialTheme.typography.bodyLarge,
-                            fontWeight = FontWeight.SemiBold,
-                            color = TextPrimaryDark,
-                            modifier = Modifier.weight(1f)
-                        )
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = if (isArabic) "استعادة نسخة احتياطية" else "Restore Backup",
+                                style = MaterialTheme.typography.bodyLarge,
+                                fontWeight = FontWeight.SemiBold,
+                                color = TextPrimaryDark
+                            )
+                            Text(
+                                text = if (isArabic) "استرجاع البيانات من ملف نسخة احتياطية سابق" else "Restore data from a previous backup file",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = TextSecondaryBrown,
+                                fontSize = 11.5.sp
+                            )
+                        }
                     }
                 }
             }
         }
 
-        // 5. Reset Data Card (إعادة ضبط البيانات)
+        // 3. Reset Data Card (إعادة ضبط البيانات)
         item {
             SettingsSectionCard(
                 title = if (isArabic) "إعادة ضبط البيانات" else "Reset Data",
@@ -473,6 +367,12 @@ fun SettingsScreen(
                     modifier = Modifier.fillMaxWidth(),
                     verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
+                    Text(
+                        text = if (isArabic) "حذف جميع السجلات والمعاملات والبدء بمحفظة جديدة تماماً" else "Delete all records and transactions and start fresh",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = TextSecondaryBrown
+                    )
+
                     OutlinedButton(
                         onClick = { showClearDataConfirmDialog = true },
                         modifier = Modifier
@@ -656,15 +556,15 @@ fun SettingsSectionCard(
         modifier = modifier.fillMaxWidth(),
         shape = RoundedCornerShape(20.dp),
         color = MaterialTheme.colorScheme.surface,
-        border = BorderStroke(0.5.dp, BorderSubtle),
-        shadowElevation = 0.dp
+        border = BorderStroke(0.8.dp, BorderSubtle),
+        shadowElevation = 0.5.dp
     ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(horizontal = 16.dp, vertical = 16.dp)
         ) {
-            // Header: Title and Icon
+            // Header: Title and Tinted Icon Badge
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -676,11 +576,20 @@ fun SettingsSectionCard(
                     fontWeight = FontWeight.Bold,
                     color = TextPrimaryDark
                 )
-                Icon(
-                    imageVector = icon,
-                    contentDescription = null,
-                    tint = BurntOrangePrimary
-                )
+                Box(
+                    modifier = Modifier
+                        .size(36.dp)
+                        .clip(CircleShape)
+                        .background(BurntOrangePrimary.copy(alpha = 0.12f)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = icon,
+                        contentDescription = null,
+                        tint = BurntOrangePrimary,
+                        modifier = Modifier.size(19.dp)
+                    )
+                }
             }
 
             Spacer(modifier = Modifier.height(12.dp))

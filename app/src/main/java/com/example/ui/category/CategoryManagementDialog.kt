@@ -179,7 +179,7 @@ fun CategoryManagementDialog(
                             )
                             Spacer(modifier = Modifier.width(6.dp))
                             Text(
-                                text = if (isArabic) "المصروفات (${expenseCategories.size})" else "Expenses (${expenseCategories.size})",
+                                text = if (isArabic) "المصروفات • ${expenseCategories.size}" else "Expenses • ${expenseCategories.size}",
                                 style = MaterialTheme.typography.titleSmall,
                                 fontWeight = FontWeight.Bold,
                                 color = if (isExpense) Color.White else TextPrimaryDark
@@ -209,7 +209,7 @@ fun CategoryManagementDialog(
                             )
                             Spacer(modifier = Modifier.width(6.dp))
                             Text(
-                                text = if (isArabic) "الإيرادات (${incomeCategories.size})" else "Income (${incomeCategories.size})",
+                                text = if (isArabic) "الإيرادات • ${incomeCategories.size}" else "Income • ${incomeCategories.size}",
                                 style = MaterialTheme.typography.titleSmall,
                                 fontWeight = FontWeight.Bold,
                                 color = if (isIncome) Color.White else TextPrimaryDark

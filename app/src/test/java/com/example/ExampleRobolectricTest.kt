@@ -77,36 +77,10 @@ class ExampleRobolectricTest {
   }
 
   @Test
-  fun `test system notifications are posted to Android NotificationManager`() {
-    val app = ApplicationProvider.getApplicationContext<android.app.Application>()
-    org.robolectric.Shadows.shadowOf(app).grantPermissions(android.Manifest.permission.POST_NOTIFICATIONS)
-
-    val sentBackup = com.example.notification.NotificationHelper.sendBackupReminder(app, isArabic = true)
-    assertTrue(sentBackup)
-
-    val smartItem = com.example.model.SmartNotificationItem(
-        id = "budget_warning",
-        titleAr = "⚠️ اقتراب من سقف الميزانية",
-        titleEn = "⚠️ Approaching Budget Limit",
-        messageAr = "تم استهلاك 85% من ميزانيتك الشهرية.",
-        messageEn = "You have spent 85% of your monthly budget.",
-        severity = com.example.model.NotificationSeverity.WARNING,
-        type = "BUDGET"
-    )
-    val sentSmart = com.example.notification.NotificationHelper.postSmartNotification(app, smartItem, isArabic = true)
-    assertTrue(sentSmart)
-
-    val notificationManager = app.getSystemService(Context.NOTIFICATION_SERVICE) as android.app.NotificationManager
-    val shadowNm = org.robolectric.Shadows.shadowOf(notificationManager)
-    assertTrue(shadowNm.allNotifications.size >= 2)
-  }
-
-  @Test
   fun `test WalletViewModel initializes without NullPointerException`() {
     val app = ApplicationProvider.getApplicationContext<android.app.Application>()
     val viewModel = com.example.ui.WalletViewModel(app)
-    assertTrue(viewModel.smartNotifications.value != null)
-    assertTrue(viewModel.unreadNotificationCount.value >= 0)
+    assertTrue(viewModel.totalBalance.value >= 0.0)
   }
 }
 

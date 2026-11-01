@@ -4,6 +4,7 @@ import android.content.Context
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
+import android.graphics.Path
 import android.graphics.RectF
 import android.graphics.Typeface
 import android.graphics.pdf.PdfDocument
@@ -29,13 +30,9 @@ import java.util.concurrent.TimeUnit
 import kotlin.math.max
 
 /**
- * Classic, Clean Financial PDF Report Generator for Nabih Wallet (محفظة نبيه).
- * Features:
- * - Balanced page margins and comfortable vertical spacing between all sections.
- * - Right-aligned classic header block with bold labels.
- * - Classic 5-column table (م | البيان | المبلغ (جنيه) | النسبة | ملاحظات) with warm brand colors.
- * - Formatted "الملخص" section with clear bullet points (• إجمالي، • متوسط، إلخ) and bold labels.
- * - Dedicated Notes/Remarks block anchored at the very bottom of the page (page footer).
+ * Refined Classic Financial PDF Report Generator for Nabih Wallet (محفظة نبيه).
+ * Preserves the classic statement layout while removing the Notes column/footer
+ * and improving visual polish (crisp borders, balanced 4-column table, and framed summary).
  */
 object PdfReportGenerator {
 
@@ -53,6 +50,14 @@ object PdfReportGenerator {
     private fun formatArabicFullDate(date: Date = Date()): String {
         val formatter = SimpleDateFormat("d MMMM yyyy", Locale("ar"))
         return formatter.format(date)
+    }
+
+    private fun formatArabicFullDateTime(date: Date = Date()): String {
+        val datePart = SimpleDateFormat("d MMMM yyyy", Locale("ar")).format(date)
+        val timePart = SimpleDateFormat("hh:mm a", Locale("ar")).format(date)
+            .replace("AM", "ص")
+            .replace("PM", "م")
+        return "$datePart - $timePart"
     }
 
     /**
@@ -103,6 +108,7 @@ object PdfReportGenerator {
             StaticLayout.Builder.obtain(text, 0, text.length, textPaint, safeWidth)
                 .setTextDirection(TextDirectionHeuristics.RTL)
                 .setAlignment(align)
+                .setLineSpacing(2.5f, 1.15f)
                 .setIncludePad(false)
                 .build()
         } else {
@@ -112,8 +118,8 @@ object PdfReportGenerator {
                 textPaint,
                 safeWidth,
                 align,
-                1.0f,
-                0.0f,
+                1.15f,
+                2.5f,
                 false
             )
         }
@@ -142,6 +148,7 @@ object PdfReportGenerator {
             StaticLayout.Builder.obtain(text, 0, text.length, textPaint, safeWidth)
                 .setTextDirection(TextDirectionHeuristics.LTR)
                 .setAlignment(align)
+                .setLineSpacing(2.5f, 1.15f)
                 .setIncludePad(false)
                 .build()
         } else {
@@ -151,8 +158,8 @@ object PdfReportGenerator {
                 textPaint,
                 safeWidth,
                 align,
-                1.0f,
-                0.0f,
+                1.15f,
+                2.5f,
                 false
             )
         }
@@ -165,39 +172,27 @@ object PdfReportGenerator {
     }
 
     /**
-     * Looks up default category description for the "ملاحظات" column when a transaction has no custom note.
-     */
-    private fun getDefaultCategoryNote(categoryName: String): String {
-        val allCats = FinancialConstants.expenseCategories + FinancialConstants.incomeCategories
-        val match = allCats.firstOrNull {
-            it.nameAr == categoryName || it.nameEn.equals(categoryName, ignoreCase = true) || it.id == categoryName
-        }
-        return match?.descriptionAr?.takeIf { it.isNotBlank() } ?: "مصروفات عامة"
-    }
-
-    /**
-     * Multi-page PDF layout manager for standard A4 pages in Classic Statement style.
-     * Reserves a dedicated footer zone at the very bottom of every page for the Notes section.
+     * Multi-page PDF layout manager for standard A4 pages in Refined Classic Statement style.
      */
     private class ClassicPdfPageManager(
         private val document: PdfDocument,
-        val reportSubtitle: String,
+        val reportTitle: String,
         val periodValue: String,
         val issueDateValue: String,
-        val itemsCountValue: String
+        val itemsCountValue: String = ""
     ) {
         val pageWidth = 595
         val pageHeight = 842
 
-        // Comfortable, balanced horizontal & vertical page margins
-        val marginLeft = 46f
-        val marginRight = 46f
-        val marginTop = 48f
+        // Expanded, generous outer page margins for breathing room
+        val marginLeft = 52f
+        val marginRight = 52f
+        val marginTop = 52f
         val contentWidth = (pageWidth - (marginLeft + marginRight)).toInt()
 
-        // Reserved bottom footer area for the Notes block (تذييل الصفحة - الأسفل تماماً)
-        val footerTopY = pageHeight - 62f
-        val maxContentY = footerTopY - 18f
+        // Reserved bottom footer area with ample vertical spacing
+        val footerTopY = pageHeight - 60f
+        val maxContentY = footerTopY - 22f
 
         var currentPageIndex = 0
         var currentPage: PdfDocument.Page? = null
@@ -205,21 +200,45 @@ object PdfReportGenerator {
         var curY = marginTop
 
         // Classic Warm Palette (Nabih Wallet colors)
-        val colorTitleText = Color.parseColor("#8C3B20")        // Deep Warm Terracotta-Brown Title
-        val colorAccentBullet = Color.parseColor("#B85435")     // Warm Terracotta Bullet
-        val colorMetaText = Color.parseColor("#2B2623")         // Classic Charcoal-Brown Metadata
+        val colorMainTitle = Color.parseColor("#2D322B")        // Dark charcoal gray (#2D322B) for formal elegance
+        val colorAccentBullet = Color.parseColor("#B85435")     // Warm Terracotta Accent
+        val colorMetaText = Color.parseColor("#2D322B")         // Classic Charcoal Metadata
+        val colorHeaderCardBg = Color.parseColor("#FCF9F6")     // Soft Warm Cream Header Box
+        val colorHeaderCardBorder = Color.parseColor("#E6DCD2") // Subtle Warm Border
         val colorFooterDivider = Color.parseColor("#E6DCD2")    // Subtle Warm Divider
-        val colorFooterNote = Color.parseColor("#6E665E")       // Readable Muted Brown for Footer Note
+        val colorFooterText = Color.parseColor("#7D7771")       // Calm Muted Gray for Footer
 
         val reportTitlePaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = colorTitleText
-            textSize = 15f
+            color = colorMainTitle
+            textSize = 17.5f
+            isFakeBoldText = true
+        }
+
+        val brandBadgePaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = colorAccentBullet
+            textSize = 11.5f
             isFakeBoldText = true
         }
 
         val metaPaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
             color = colorMetaText
-            textSize = 11f
+            textSize = 11.8f
+        }
+
+        val headerBoxBgPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = colorHeaderCardBg
+            style = Paint.Style.FILL
+        }
+
+        val headerBoxBorderPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = colorHeaderCardBorder
+            strokeWidth = 1f
+            style = Paint.Style.STROKE
+        }
+
+        val accentStripePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = colorAccentBullet
+            style = Paint.Style.FILL
         }
 
         val footerDividerPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
@@ -228,9 +247,10 @@ object PdfReportGenerator {
             style = Paint.Style.STROKE
         }
 
-        val footerNotePaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = colorFooterNote
+        val footerTextPaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = colorFooterText
             textSize = 9.5f
+            typeface = Typeface.create(Typeface.SANS_SERIF, Typeface.NORMAL)
         }
 
         private fun drawPageFooter(canvas: Canvas) {
@@ -240,19 +260,28 @@ object PdfReportGenerator {
             // Subtle divider line separating page content from the bottom footer
             canvas.drawLine(left, footerTopY, right, footerTopY, footerDividerPaint)
 
-            // Notes field anchored at the very bottom of the page (تذييل الصفحة)
-            val noteSpan = buildLabelValueSpan(
-                label = "الملاحظات:",
-                value = "هذا التقرير تم إنشاؤه من بيانات محفظة نبيه."
-            )
+            val footerY = footerTopY + 12f
+
+            // Fixed documentation phrase in calm gray at the bottom of every page
             drawBidiText(
                 canvas = canvas,
-                text = noteSpan,
+                text = "تم إنشاء هذا التقرير بواسطة Nabih Wallet",
                 x = left,
-                y = footerTopY + 10f,
+                y = footerY,
                 width = contentWidth,
-                textPaint = footerNotePaint,
+                textPaint = footerTextPaint,
                 align = Layout.Alignment.ALIGN_NORMAL
+            )
+
+            // Subtle page number aligned opposite
+            drawBidiText(
+                canvas = canvas,
+                text = "صفحة $currentPageIndex",
+                x = left,
+                y = footerY,
+                width = contentWidth,
+                textPaint = footerTextPaint,
+                align = Layout.Alignment.ALIGN_OPPOSITE
             )
         }
 
@@ -278,63 +307,73 @@ object PdfReportGenerator {
 
             curY = marginTop
             val tableLeft = marginLeft
+            val tableRight = pageWidth - marginRight
 
             if (currentPageIndex == 1) {
-                // Classic Top-Right Header Block with comfortable line spacing
-                drawBidiText(
-                    canvas,
-                    reportSubtitle,
-                    tableLeft,
-                    curY,
-                    contentWidth,
-                    reportTitlePaint,
-                    Layout.Alignment.ALIGN_NORMAL
+                // 1. Centered Main Report Title in bold #2D322B
+                val titleTopY = curY
+                val titleHeight = drawBidiText(
+                    canvas = canvas,
+                    text = reportTitle,
+                    x = tableLeft,
+                    y = titleTopY,
+                    width = contentWidth,
+                    textPaint = reportTitlePaint,
+                    align = Layout.Alignment.ALIGN_CENTER
                 )
-                curY += 28f
+                curY = titleTopY + titleHeight + 14f
+
+                // 2. Light, organized card below the title
+                val boxTop = curY
+                val hasItemsCount = itemsCountValue.isNotBlank()
+                val boxHeight = if (hasItemsCount) 92f else 68f
+                val boxRect = RectF(tableLeft, boxTop, tableRight, boxTop + boxHeight)
+                canvas.drawRoundRect(boxRect, 8f, 8f, headerBoxBgPaint)
+                canvas.drawRoundRect(boxRect, 8f, 8f, headerBoxBorderPaint)
+
+                // Right-side vertical accent bar inside header box
+                val stripeRect = RectF(tableRight - 4.5f, boxTop + 8f, tableRight - 1f, boxTop + boxHeight - 8f)
+                canvas.drawRoundRect(stripeRect, 2f, 2f, accentStripePaint)
+
+                val innerWidth = contentWidth - 32
+                val innerX = tableLeft + 16f
+                var innerY = boxTop + 14f
 
                 drawBidiText(
                     canvas,
-                    buildLabelValueSpan("• الفترة:", periodValue, bulletColor = colorAccentBullet),
-                    tableLeft,
-                    curY,
-                    contentWidth,
+                    buildLabelValueSpan("• تاريخ الإصدار:", issueDateValue, bulletColor = colorAccentBullet),
+                    innerX,
+                    innerY,
+                    innerWidth,
                     metaPaint,
                     Layout.Alignment.ALIGN_NORMAL
                 )
-                curY += 21f
+                innerY += 25f
 
                 drawBidiText(
                     canvas,
-                    buildLabelValueSpan("• تاريخ إصدار التقرير:", issueDateValue, bulletColor = colorAccentBullet),
-                    tableLeft,
-                    curY,
-                    contentWidth,
+                    buildLabelValueSpan("• الفترة الزمنية:", periodValue, bulletColor = colorAccentBullet),
+                    innerX,
+                    innerY,
+                    innerWidth,
                     metaPaint,
                     Layout.Alignment.ALIGN_NORMAL
                 )
-                curY += 21f
 
-                drawBidiText(
-                    canvas,
-                    buildLabelValueSpan("• عدد البنود:", itemsCountValue, bulletColor = colorAccentBullet),
-                    tableLeft,
-                    curY,
-                    contentWidth,
-                    metaPaint,
-                    Layout.Alignment.ALIGN_NORMAL
-                )
-                curY += 26f
-            } else {
-                drawBidiText(
-                    canvas,
-                    reportSubtitle,
-                    tableLeft,
-                    curY,
-                    contentWidth,
-                    reportTitlePaint,
-                    Layout.Alignment.ALIGN_NORMAL
-                )
-                curY += 26f
+                if (hasItemsCount) {
+                    innerY += 25f
+                    drawBidiText(
+                        canvas,
+                        buildLabelValueSpan("• عدد البنود:", itemsCountValue, bulletColor = colorAccentBullet),
+                        innerX,
+                        innerY,
+                        innerWidth,
+                        metaPaint,
+                        Layout.Alignment.ALIGN_NORMAL
+                    )
+                }
+
+                curY = boxTop + boxHeight + 24f
             }
 
             return canvas
@@ -353,11 +392,26 @@ object PdfReportGenerator {
     }
 
     /**
-     * GENERATE CLASSIC EXPENSE REPORT
-     * - Clean header with well-spaced metadata lines.
-     * - Harmonious 5-column table with comfortable cell padding and row height.
-     * - Bulleted "الملخص" section (• إجمالي، • متوسط، إلخ).
-     * - Notes block anchored at the very bottom footer of the page.
+     * Helper to draw a top-rounded rectangle for the table header.
+     */
+    private fun drawTopRoundedRect(canvas: Canvas, rect: RectF, radius: Float, paint: Paint) {
+        val path = Path().apply {
+            val radii = floatArrayOf(
+                radius, radius,   // Top-left
+                radius, radius,   // Top-right
+                0f, 0f,           // Bottom-right
+                0f, 0f            // Bottom-left
+            )
+            addRoundRect(rect, radii, Path.Direction.CW)
+        }
+        canvas.drawPath(path, paint)
+    }
+
+    /**
+     * GENERATE CLASSIC EXPENSE REPORT (Without Notes Column or Footer Notes)
+     * - Refined header box with metadata lines.
+     * - Clean 4-column table (م | البيان | المبلغ | النسبة) with subtle grid lines.
+     * - Framed "الملخص" section with clear bullets (• إجمالي، • متوسط، إلخ).
      */
     fun generateExpenseReport(
         context: Context,
@@ -368,7 +422,7 @@ object PdfReportGenerator {
         endDateStr: String = ""
     ): File {
         val pdfDocument = PdfDocument()
-        val issueDateStr = formatArabicFullDate(Date())
+        val issueDateStr = formatArabicFullDateTime(Date())
 
         val expenseTransactions = transactions.filter { it.type == "EXPENSE" }
         val targetExpenses = expenseTransactions.ifEmpty { transactions }
@@ -387,14 +441,17 @@ object PdfReportGenerator {
                 val durationLabel = when {
                     diffDays >= 30L -> {
                         val months = max(1L, Math.round(diffDays / 30.0))
-                        " ($months شهرًا)"
+                        " - $months شهرًا"
                     }
-                    diffDays > 1L -> " ($diffDays يومًا)"
+                    diffDays > 1L -> " - $diffDays يومًا"
                     else -> ""
                 }
                 "من $fromStr إلى $toStr$durationLabel"
             }
-            else -> periodTitle
+            periodTitle.isNotBlank() -> {
+                if (periodTitle.startsWith("عن ") || periodTitle.startsWith("من ")) periodTitle else "عن $periodTitle"
+            }
+            else -> "كافة المصروفات المسجلة"
         }
 
         val totalExpenses = targetExpenses.sumOf { it.amount }
@@ -403,32 +460,25 @@ object PdfReportGenerator {
         data class ClassicExpenseRow(
             val title: String,
             val amount: Double,
-            val percentage: Double,
-            val notes: String
+            val percentage: Double
         )
 
         val categoryRows = targetExpenses
-            .groupBy { it.category.ifBlank { "أخرى" } }
+            .groupBy { FinancialConstants.normalizeCategoryName(it.category).ifBlank { "أخرى" } }
             .map { (catName, items) ->
                 val sum = items.sumOf { it.amount }
                 val pct = (sum / totalVolume) * 100.0
-                val userNotes = items
-                    .mapNotNull { it.notes.trim().takeIf { n -> n.isNotEmpty() } }
-                    .distinct()
-                    .joinToString(" / ")
-                val noteText = userNotes.ifEmpty { getDefaultCategoryNote(catName) }
                 ClassicExpenseRow(
                     title = catName,
                     amount = sum,
-                    percentage = pct,
-                    notes = noteText
+                    percentage = pct
                 )
             }
             .sortedByDescending { it.amount }
 
         val pageManager = ClassicPdfPageManager(
             document = pdfDocument,
-            reportSubtitle = "تقرير: بيان المصروفات الشخصية",
+            reportTitle = "تقرير بيان المصروفات الشخصية",
             periodValue = periodValueStr,
             issueDateValue = issueDateStr,
             itemsCountValue = "${categoryRows.size} بنود"
@@ -439,6 +489,8 @@ object PdfReportGenerator {
         val colorZebraBg = Color.parseColor("#F9F3EE")          // Soft Warm Cream Zebra Row
         val colorTotalRowBg = Color.parseColor("#EFE3D8")       // Warm Tinted Total Bar
         val colorRowDivider = Color.parseColor("#E6DCD2")       // Subtle Warm Divider
+        val colorColDivider = Color.parseColor("#EDE4DC")       // Subtle Vertical Column Divider
+        val colorTableBorder = Color.parseColor("#D8C8B8")      // Crisp Outer Table Border
         val colorTextDark = Color.parseColor("#1E1B18")         // Deep Warm Charcoal Text
         val colorSectionTitle = Color.parseColor("#8C3B20")     // Warm Terracotta-Brown Section Title
 
@@ -459,34 +511,44 @@ object PdfReportGenerator {
             strokeWidth = 0.8f
             style = Paint.Style.STROKE
         }
+        val colDividerPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = colorColDivider
+            strokeWidth = 0.7f
+            style = Paint.Style.STROKE
+        }
+        val tableBorderPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = colorTableBorder
+            strokeWidth = 1f
+            style = Paint.Style.STROKE
+        }
 
         val tableHeaderPaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
             color = Color.WHITE
-            textSize = 10.5f
+            textSize = 12f
             isFakeBoldText = true
         }
         val cellTextPaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
             color = colorTextDark
-            textSize = 10.5f
+            textSize = 11.5f
         }
         val cellBoldPaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
             color = colorTextDark
-            textSize = 10.5f
+            textSize = 11.8f
             isFakeBoldText = true
         }
         val totalTextPaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
             color = colorTextDark
-            textSize = 11f
+            textSize = 12.2f
             isFakeBoldText = true
         }
         val summaryHeaderPaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
             color = colorSectionTitle
-            textSize = 13.5f
+            textSize = 14.5f
             isFakeBoldText = true
         }
         val summaryLinePaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
             color = colorTextDark
-            textSize = 11f
+            textSize = 11.8f
         }
 
         var canvas = pageManager.startNewPage()
@@ -495,56 +557,58 @@ object PdfReportGenerator {
         val totalWidth = pageManager.contentWidth.toFloat()
 
         // -------------------------------------------------------------------------
-        // CLASSIC 5-COLUMN TABLE (RTL: م | البيان | المبلغ (جنيه) | النسبة | ملاحظات)
+        // CLEAN 4-COLUMN TABLE (RTL: م | البيان | المبلغ | النسبة)
         // -------------------------------------------------------------------------
-        val colW_seq = 38f
-        val colW_amount = 118f
-        val colW_pct = 76f
-        val colW_notes = 132f
-        val colW_item = totalWidth - (colW_seq + colW_amount + colW_pct + colW_notes)
+        val colW_seq = 46f
+        val colW_amount = 148f
+        val colW_pct = 96f
+        val colW_item = totalWidth - (colW_seq + colW_amount + colW_pct)
 
         // LTR X positions (Left -> Right):
-        // [ملاحظات] [النسبة] [المبلغ] [البيان] [م]
-        val x_notes = tableLeft
-        val x_pct = x_notes + colW_notes
+        // [النسبة] [المبلغ] [البيان] [م]
+        val x_pct = tableLeft
         val x_amount = x_pct + colW_pct
         val x_item = x_amount + colW_amount
         val x_seq = x_item + colW_item
 
         fun drawClassicTableHeader(c: Canvas, topY: Float): Float {
-            val headerH = 34f
+            val headerH = 40f
             val headerRect = RectF(tableLeft, topY, tableRight, topY + headerH)
-            c.drawRect(headerRect, headerBgPaint)
+            drawTopRoundedRect(c, headerRect, 7f, headerBgPaint)
 
-            val textY = topY + 9f
+            val textY = topY + 11f
             drawBidiText(c, "م", x_seq, textY, colW_seq.toInt(), tableHeaderPaint, Layout.Alignment.ALIGN_CENTER)
-            drawBidiText(c, "البيان", x_item, textY, (colW_item - 10f).toInt(), tableHeaderPaint, Layout.Alignment.ALIGN_NORMAL)
-            drawBidiText(c, "المبلغ ($currencySymbol)", x_amount, textY, colW_amount.toInt(), tableHeaderPaint, Layout.Alignment.ALIGN_CENTER)
+            drawBidiText(c, "البيان", x_item, textY, (colW_item - 14f).toInt(), tableHeaderPaint, Layout.Alignment.ALIGN_NORMAL)
+            drawBidiText(c, "المبلغ $currencySymbol", x_amount, textY, colW_amount.toInt(), tableHeaderPaint, Layout.Alignment.ALIGN_CENTER)
             drawBidiText(c, "النسبة", x_pct, textY, colW_pct.toInt(), tableHeaderPaint, Layout.Alignment.ALIGN_CENTER)
-            drawBidiText(c, "ملاحظات", x_notes + 8f, textY, (colW_notes - 14f).toInt(), tableHeaderPaint, Layout.Alignment.ALIGN_NORMAL)
             return topY + headerH
         }
 
+        var tableStartTopY = pageManager.curY
         pageManager.curY = drawClassicTableHeader(canvas, pageManager.curY)
 
-        val rowHeight = 34f
+        val rowHeight = 39f
         if (categoryRows.isEmpty()) {
             canvas = pageManager.ensureSpace(rowHeight)
             drawBidiText(
                 canvas,
                 "لا توجد مصروفات مسجلة خلال هذه الفترة",
                 tableLeft,
-                pageManager.curY + 9f,
+                pageManager.curY + 10.5f,
                 totalWidth.toInt(),
                 cellTextPaint,
                 Layout.Alignment.ALIGN_CENTER
             )
             canvas.drawLine(tableLeft, pageManager.curY + rowHeight, tableRight, pageManager.curY + rowHeight, rowDividerPaint)
             pageManager.curY += rowHeight
+            canvas.drawRoundRect(RectF(tableLeft, tableStartTopY, tableRight, pageManager.curY), 7f, 7f, tableBorderPaint)
         } else {
             categoryRows.forEachIndexed { index, row ->
                 if (pageManager.curY + rowHeight > pageManager.maxContentY) {
+                    // Close border on current page table before starting new page
+                    canvas.drawRoundRect(RectF(tableLeft, tableStartTopY, tableRight, pageManager.curY), 7f, 7f, tableBorderPaint)
                     canvas = pageManager.startNewPage()
+                    tableStartTopY = pageManager.curY
                     pageManager.curY = drawClassicTableHeader(canvas, pageManager.curY)
                 }
 
@@ -556,20 +620,22 @@ object PdfReportGenerator {
                     canvas.drawRect(RectF(tableLeft, rTop, tableRight, rBottom), zebraBgPaint)
                 }
 
-                val textY = rTop + 9f
+                // Subtle vertical column dividers
+                canvas.drawLine(x_amount, rTop, x_amount, rBottom, colDividerPaint)
+                canvas.drawLine(x_item, rTop, x_item, rBottom, colDividerPaint)
+                canvas.drawLine(x_seq, rTop, x_seq, rBottom, colDividerPaint)
+
+                val textY = rTop + 10.5f
                 val pctStr = "${String.format(Locale.US, "%.1f", row.percentage)}%"
 
                 // 1. م
                 drawLtrText(canvas, "${index + 1}", x_seq, textY, colW_seq.toInt(), cellTextPaint, Layout.Alignment.ALIGN_CENTER)
                 // 2. البيان
-                drawBidiText(canvas, row.title, x_item, textY, (colW_item - 10f).toInt(), cellBoldPaint, Layout.Alignment.ALIGN_NORMAL)
+                drawBidiText(canvas, row.title, x_item, textY, (colW_item - 14f).toInt(), cellBoldPaint, Layout.Alignment.ALIGN_NORMAL)
                 // 3. المبلغ
-                drawLtrText(canvas, formatAmount(row.amount), x_amount, textY, colW_amount.toInt(), cellTextPaint, Layout.Alignment.ALIGN_CENTER)
+                drawLtrText(canvas, formatAmount(row.amount), x_amount, textY, colW_amount.toInt(), cellBoldPaint, Layout.Alignment.ALIGN_CENTER)
                 // 4. النسبة
                 drawLtrText(canvas, pctStr, x_pct, textY, colW_pct.toInt(), cellTextPaint, Layout.Alignment.ALIGN_CENTER)
-                // 5. ملاحظات
-                val noteDisplay = if (row.notes.length > 26) row.notes.take(24) + "…" else row.notes
-                drawBidiText(canvas, noteDisplay, x_notes + 8f, textY, (colW_notes - 14f).toInt(), cellTextPaint, Layout.Alignment.ALIGN_NORMAL)
 
                 // Thin bottom row divider
                 canvas.drawLine(tableLeft, rBottom, tableRight, rBottom, rowDividerPaint)
@@ -578,18 +644,28 @@ object PdfReportGenerator {
             }
 
             // Total Row (إجمالي المصروفات)
-            val totalRowH = 36f
-            canvas = pageManager.ensureSpace(totalRowH + 10f)
-            val totalRect = RectF(tableLeft, pageManager.curY, tableRight, pageManager.curY + totalRowH)
+            val totalRowH = 42f
+            if (pageManager.curY + totalRowH > pageManager.maxContentY) {
+                canvas.drawRoundRect(RectF(tableLeft, tableStartTopY, tableRight, pageManager.curY), 7f, 7f, tableBorderPaint)
+                canvas = pageManager.startNewPage()
+                tableStartTopY = pageManager.curY
+            }
+            val totalTop = pageManager.curY
+            val totalBottom = totalTop + totalRowH
+            val totalRect = RectF(tableLeft, totalTop, tableRight, totalBottom)
             canvas.drawRect(totalRect, totalBgPaint)
 
-            val totalTextY = pageManager.curY + 10f
+            // Vertical dividers in total row
+            canvas.drawLine(x_amount, totalTop, x_amount, totalBottom, colDividerPaint)
+            canvas.drawLine(x_item, totalTop, x_item, totalBottom, colDividerPaint)
+
+            val totalTextY = totalTop + 12f
             drawBidiText(
                 canvas,
                 "إجمالي المصروفات",
                 x_item,
                 totalTextY,
-                (colW_item - 10f).toInt(),
+                (colW_item - 14f).toInt(),
                 totalTextPaint,
                 Layout.Alignment.ALIGN_NORMAL
             )
@@ -602,29 +678,57 @@ object PdfReportGenerator {
                 totalTextPaint,
                 Layout.Alignment.ALIGN_CENTER
             )
+            drawLtrText(
+                canvas,
+                "100%",
+                x_pct,
+                totalTextY,
+                colW_pct.toInt(),
+                totalTextPaint,
+                Layout.Alignment.ALIGN_CENTER
+            )
 
-            pageManager.curY += totalRowH
+            pageManager.curY = totalBottom
+
+            // Outer border around the completed table
+            canvas.drawRoundRect(RectF(tableLeft, tableStartTopY, tableRight, pageManager.curY), 7f, 7f, tableBorderPaint)
         }
 
         // -------------------------------------------------------------------------
-        // CLASSIC SUMMARY SECTION (الملخص) WITH CLEAR BULLETS (•) & SPACING
+        // FRAMED SUMMARY SECTION (الملخص) WITH CLEAR BULLETS (•) & SPACING
         // -------------------------------------------------------------------------
-        pageManager.curY += 36f
-        canvas = pageManager.ensureSpace(165f)
+        pageManager.curY += 30f
+
+        val topCategory = categoryRows.firstOrNull()
+        val lowestCategory = categoryRows.lastOrNull()?.takeIf { it != topCategory }
+        val bulletCount = 3 + (if (topCategory != null) 1 else 0) + (if (lowestCategory != null) 1 else 0)
+        val summaryCardHeight = 52f + (bulletCount * 26f) + 14f
+
+        canvas = pageManager.ensureSpace(summaryCardHeight)
+
+        val summaryTop = pageManager.curY
+        val summaryRect = RectF(tableLeft, summaryTop, tableRight, summaryTop + summaryCardHeight)
+        canvas.drawRoundRect(summaryRect, 8f, 8f, pageManager.headerBoxBgPaint)
+        canvas.drawRoundRect(summaryRect, 8f, 8f, pageManager.headerBoxBorderPaint)
+
+        // Right-side terracotta accent bar inside summary card
+        val summaryStripe = RectF(tableRight - 4.5f, summaryTop + 8f, tableRight - 1f, summaryTop + summaryCardHeight - 8f)
+        canvas.drawRoundRect(summaryStripe, 2f, 2f, pageManager.accentStripePaint)
+
+        val summaryInnerX = tableLeft + 16f
+        val summaryInnerWidth = (totalWidth - 32f).toInt()
+        pageManager.curY = summaryTop + 16f
 
         drawBidiText(
             canvas,
             "الملخص:",
-            tableLeft,
+            summaryInnerX,
             pageManager.curY,
-            totalWidth.toInt(),
+            summaryInnerWidth,
             summaryHeaderPaint,
             Layout.Alignment.ALIGN_NORMAL
         )
-        pageManager.curY += 26f
-
-        val bulletIndentRight = 6f
-        val summaryWidth = (totalWidth - bulletIndentRight).toInt()
+        pageManager.curY += 29f
 
         fun drawBulletedSummaryLine(label: String, value: String) {
             val span = buildLabelValueSpan(
@@ -636,13 +740,13 @@ object PdfReportGenerator {
             drawBidiText(
                 canvas = canvas,
                 text = span,
-                x = tableLeft,
+                x = summaryInnerX,
                 y = pageManager.curY,
-                width = summaryWidth,
+                width = summaryInnerWidth,
                 textPaint = summaryLinePaint,
                 align = Layout.Alignment.ALIGN_NORMAL
             )
-            pageManager.curY += 23f
+            pageManager.curY += 26f
         }
 
         // 1. • إجمالي المصروفات خلال الفترة
@@ -667,26 +771,23 @@ object PdfReportGenerator {
         )
 
         // 4. • أعلى بند إنفاق
-        val topCategory = categoryRows.firstOrNull()
         if (topCategory != null) {
             val topPct = String.format(Locale.US, "%.1f", topCategory.percentage)
             drawBulletedSummaryLine(
                 label = "أعلى بند إنفاق:",
-                value = "${topCategory.title} ($topPct% من الإجمالي)"
+                value = "${topCategory.title} - $topPct% من الإجمالي"
             )
         }
 
         // 5. • أقل بند إنفاق
-        val lowestCategory = categoryRows.lastOrNull()
-        if (lowestCategory != null && lowestCategory != topCategory) {
+        if (lowestCategory != null) {
             val lowPct = String.format(Locale.US, "%.1f", lowestCategory.percentage)
             drawBulletedSummaryLine(
                 label = "أقل بند إنفاق:",
-                value = "${lowestCategory.title} ($lowPct% من الإجمالي)"
+                value = "${lowestCategory.title} - $lowPct% من الإجمالي"
             )
         }
 
-        // Finish page (automatically draws the Notes block at the very bottom footer of the page)
         pageManager.finish()
 
         val reportsDir = File(context.cacheDir, "reports").apply { mkdirs() }
@@ -701,8 +802,7 @@ object PdfReportGenerator {
     }
 
     /**
-     * GENERATE CLASSIC DEBTS REPORT
-     * Uses the same organized layout, bulleted summary, and bottom-anchored footer notes.
+     * GENERATE CLASSIC DEBTS REPORT (Without Notes Column or Footer Notes)
      */
     fun generateDebtsReportFromRecords(
         context: Context,
@@ -710,7 +810,7 @@ object PdfReportGenerator {
         currencySymbol: String = "جنيه"
     ): File {
         val pdfDocument = PdfDocument()
-        val issueDateStr = formatArabicFullDate(Date())
+        val issueDateStr = formatArabicFullDateTime(Date())
 
         val totalOwedToMe = debts.filter { it.type == "LENT" }.sumOf { it.remainingAmount }
         val totalIOwe = debts.filter { it.type == "BORROWED" }.sumOf { it.remainingAmount }
@@ -727,7 +827,7 @@ object PdfReportGenerator {
 
         val pageManager = ClassicPdfPageManager(
             document = pdfDocument,
-            reportSubtitle = "تقرير: بيان الديون والالتزامات الشخصية",
+            reportTitle = "تقرير بيان الديون والالتزامات الشخصية",
             periodValue = periodValueStr,
             issueDateValue = issueDateStr,
             itemsCountValue = "${debts.size} بنود"
@@ -737,6 +837,8 @@ object PdfReportGenerator {
         val colorZebraBg = Color.parseColor("#F9F3EE")
         val colorTotalRowBg = Color.parseColor("#EFE3D8")
         val colorRowDivider = Color.parseColor("#E6DCD2")
+        val colorColDivider = Color.parseColor("#EDE4DC")
+        val colorTableBorder = Color.parseColor("#D8C8B8")
         val colorTextDark = Color.parseColor("#1E1B18")
         val colorSectionTitle = Color.parseColor("#8C3B20")
 
@@ -757,34 +859,44 @@ object PdfReportGenerator {
             strokeWidth = 0.8f
             style = Paint.Style.STROKE
         }
+        val colDividerPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = colorColDivider
+            strokeWidth = 0.7f
+            style = Paint.Style.STROKE
+        }
+        val tableBorderPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = colorTableBorder
+            strokeWidth = 1f
+            style = Paint.Style.STROKE
+        }
 
         val tableHeaderPaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
             color = Color.WHITE
-            textSize = 10.5f
+            textSize = 12f
             isFakeBoldText = true
         }
         val cellTextPaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
             color = colorTextDark
-            textSize = 10.5f
+            textSize = 11.5f
         }
         val cellBoldPaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
             color = colorTextDark
-            textSize = 10.5f
+            textSize = 11.8f
             isFakeBoldText = true
         }
         val totalTextPaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
             color = colorTextDark
-            textSize = 11f
+            textSize = 12.2f
             isFakeBoldText = true
         }
         val summaryHeaderPaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
             color = colorSectionTitle
-            textSize = 13.5f
+            textSize = 14.5f
             isFakeBoldText = true
         }
         val summaryLinePaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
             color = colorTextDark
-            textSize = 11f
+            textSize = 11.8f
         }
 
         var canvas = pageManager.startNewPage()
@@ -792,53 +904,54 @@ object PdfReportGenerator {
         val tableRight = pageManager.pageWidth - pageManager.marginRight
         val totalWidth = pageManager.contentWidth.toFloat()
 
-        // Classic 5-Column Table (RTL: م | البيان | المبلغ (جنيه) | النسبة | ملاحظات)
-        val colW_seq = 38f
-        val colW_amount = 118f
-        val colW_pct = 76f
-        val colW_notes = 132f
-        val colW_item = totalWidth - (colW_seq + colW_amount + colW_pct + colW_notes)
+        // Clean 4-Column Table (RTL: م | البيان | المبلغ | النسبة)
+        val colW_seq = 46f
+        val colW_amount = 148f
+        val colW_pct = 96f
+        val colW_item = totalWidth - (colW_seq + colW_amount + colW_pct)
 
-        val x_notes = tableLeft
-        val x_pct = x_notes + colW_notes
+        val x_pct = tableLeft
         val x_amount = x_pct + colW_pct
         val x_item = x_amount + colW_amount
         val x_seq = x_item + colW_item
 
         fun drawClassicDebtsHeader(c: Canvas, topY: Float): Float {
-            val headerH = 34f
+            val headerH = 40f
             val headerRect = RectF(tableLeft, topY, tableRight, topY + headerH)
-            c.drawRect(headerRect, headerBgPaint)
+            drawTopRoundedRect(c, headerRect, 7f, headerBgPaint)
 
-            val textY = topY + 9f
+            val textY = topY + 11f
             drawBidiText(c, "م", x_seq, textY, colW_seq.toInt(), tableHeaderPaint, Layout.Alignment.ALIGN_CENTER)
-            drawBidiText(c, "البيان", x_item, textY, (colW_item - 10f).toInt(), tableHeaderPaint, Layout.Alignment.ALIGN_NORMAL)
-            drawBidiText(c, "المبلغ ($currencySymbol)", x_amount, textY, colW_amount.toInt(), tableHeaderPaint, Layout.Alignment.ALIGN_CENTER)
+            drawBidiText(c, "البيان", x_item, textY, (colW_item - 14f).toInt(), tableHeaderPaint, Layout.Alignment.ALIGN_NORMAL)
+            drawBidiText(c, "المبلغ $currencySymbol", x_amount, textY, colW_amount.toInt(), tableHeaderPaint, Layout.Alignment.ALIGN_CENTER)
             drawBidiText(c, "النسبة", x_pct, textY, colW_pct.toInt(), tableHeaderPaint, Layout.Alignment.ALIGN_CENTER)
-            drawBidiText(c, "ملاحظات", x_notes + 8f, textY, (colW_notes - 14f).toInt(), tableHeaderPaint, Layout.Alignment.ALIGN_NORMAL)
             return topY + headerH
         }
 
+        var tableStartTopY = pageManager.curY
         pageManager.curY = drawClassicDebtsHeader(canvas, pageManager.curY)
 
-        val rowHeight = 34f
+        val rowHeight = 39f
         if (debts.isEmpty()) {
             canvas = pageManager.ensureSpace(rowHeight)
             drawBidiText(
                 canvas,
                 "لا توجد ديون مسجلة",
                 tableLeft,
-                pageManager.curY + 9f,
+                pageManager.curY + 10.5f,
                 totalWidth.toInt(),
                 cellTextPaint,
                 Layout.Alignment.ALIGN_CENTER
             )
             canvas.drawLine(tableLeft, pageManager.curY + rowHeight, tableRight, pageManager.curY + rowHeight, rowDividerPaint)
             pageManager.curY += rowHeight
+            canvas.drawRoundRect(RectF(tableLeft, tableStartTopY, tableRight, pageManager.curY), 7f, 7f, tableBorderPaint)
         } else {
             debts.forEachIndexed { index, item ->
                 if (pageManager.curY + rowHeight > pageManager.maxContentY) {
+                    canvas.drawRoundRect(RectF(tableLeft, tableStartTopY, tableRight, pageManager.curY), 7f, 7f, tableBorderPaint)
                     canvas = pageManager.startNewPage()
+                    tableStartTopY = pageManager.curY
                     pageManager.curY = drawClassicDebtsHeader(canvas, pageManager.curY)
                 }
 
@@ -849,34 +962,46 @@ object PdfReportGenerator {
                     canvas.drawRect(RectF(tableLeft, rTop, tableRight, rBottom), zebraBgPaint)
                 }
 
+                canvas.drawLine(x_amount, rTop, x_amount, rBottom, colDividerPaint)
+                canvas.drawLine(x_item, rTop, x_item, rBottom, colDividerPaint)
+                canvas.drawLine(x_seq, rTop, x_seq, rBottom, colDividerPaint)
+
                 val pct = (item.remainingAmount / totalVolume) * 100.0
                 val pctStr = "${String.format(Locale.US, "%.1f", pct)}%"
-                val typeNote = if (item.type == "LENT") "مستحق لي" else "مستحق علي"
-                val statusNote = if (item.remainingAmount <= 0.001) "مسدد بالكامل" else typeNote
+                val typeLabel = if (item.type == "LENT") "له" else "عليه"
+                val displayName = "${item.personName} - $typeLabel"
 
-                val textY = rTop + 9f
+                val textY = rTop + 10.5f
                 drawLtrText(canvas, "${index + 1}", x_seq, textY, colW_seq.toInt(), cellTextPaint, Layout.Alignment.ALIGN_CENTER)
-                drawBidiText(canvas, item.personName, x_item, textY, (colW_item - 10f).toInt(), cellBoldPaint, Layout.Alignment.ALIGN_NORMAL)
-                drawLtrText(canvas, formatAmount(item.remainingAmount), x_amount, textY, colW_amount.toInt(), cellTextPaint, Layout.Alignment.ALIGN_CENTER)
+                drawBidiText(canvas, displayName, x_item, textY, (colW_item - 14f).toInt(), cellBoldPaint, Layout.Alignment.ALIGN_NORMAL)
+                drawLtrText(canvas, formatAmount(item.remainingAmount), x_amount, textY, colW_amount.toInt(), cellBoldPaint, Layout.Alignment.ALIGN_CENTER)
                 drawLtrText(canvas, pctStr, x_pct, textY, colW_pct.toInt(), cellTextPaint, Layout.Alignment.ALIGN_CENTER)
-                drawBidiText(canvas, statusNote, x_notes + 8f, textY, (colW_notes - 14f).toInt(), cellTextPaint, Layout.Alignment.ALIGN_NORMAL)
 
                 canvas.drawLine(tableLeft, rBottom, tableRight, rBottom, rowDividerPaint)
                 pageManager.curY += rowHeight
             }
 
-            val totalRowH = 36f
-            canvas = pageManager.ensureSpace(totalRowH + 10f)
-            val totalRect = RectF(tableLeft, pageManager.curY, tableRight, pageManager.curY + totalRowH)
+            val totalRowH = 42f
+            if (pageManager.curY + totalRowH > pageManager.maxContentY) {
+                canvas.drawRoundRect(RectF(tableLeft, tableStartTopY, tableRight, pageManager.curY), 7f, 7f, tableBorderPaint)
+                canvas = pageManager.startNewPage()
+                tableStartTopY = pageManager.curY
+            }
+            val totalTop = pageManager.curY
+            val totalBottom = totalTop + totalRowH
+            val totalRect = RectF(tableLeft, totalTop, tableRight, totalBottom)
             canvas.drawRect(totalRect, totalBgPaint)
 
-            val totalTextY = pageManager.curY + 10f
+            canvas.drawLine(x_amount, totalTop, x_amount, totalBottom, colDividerPaint)
+            canvas.drawLine(x_item, totalTop, x_item, totalBottom, colDividerPaint)
+
+            val totalTextY = totalTop + 12f
             drawBidiText(
                 canvas,
                 "إجمالي المديونيات المتبقية",
                 x_item,
                 totalTextY,
-                (colW_item - 10f).toInt(),
+                (colW_item - 14f).toInt(),
                 totalTextPaint,
                 Layout.Alignment.ALIGN_NORMAL
             )
@@ -889,27 +1014,47 @@ object PdfReportGenerator {
                 totalTextPaint,
                 Layout.Alignment.ALIGN_CENTER
             )
+            drawLtrText(
+                canvas,
+                "100%",
+                x_pct,
+                totalTextY,
+                colW_pct.toInt(),
+                totalTextPaint,
+                Layout.Alignment.ALIGN_CENTER
+            )
 
-            pageManager.curY += totalRowH
+            pageManager.curY = totalBottom
+            canvas.drawRoundRect(RectF(tableLeft, tableStartTopY, tableRight, pageManager.curY), 7f, 7f, tableBorderPaint)
         }
 
-        // Summary Section (الملخص) with Bullets
-        pageManager.curY += 36f
-        canvas = pageManager.ensureSpace(140f)
+        // Framed Summary Section (الملخص) with Bullets
+        pageManager.curY += 30f
+        val summaryCardHeight = 52f + (4 * 26f) + 14f
+        canvas = pageManager.ensureSpace(summaryCardHeight)
+
+        val summaryTop = pageManager.curY
+        val summaryRect = RectF(tableLeft, summaryTop, tableRight, summaryTop + summaryCardHeight)
+        canvas.drawRoundRect(summaryRect, 8f, 8f, pageManager.headerBoxBgPaint)
+        canvas.drawRoundRect(summaryRect, 8f, 8f, pageManager.headerBoxBorderPaint)
+
+        val summaryStripe = RectF(tableRight - 4.5f, summaryTop + 8f, tableRight - 1f, summaryTop + summaryCardHeight - 8f)
+        canvas.drawRoundRect(summaryStripe, 2f, 2f, pageManager.accentStripePaint)
+
+        val summaryInnerX = tableLeft + 16f
+        val summaryInnerWidth = (totalWidth - 32f).toInt()
+        pageManager.curY = summaryTop + 16f
 
         drawBidiText(
             canvas,
             "الملخص:",
-            tableLeft,
+            summaryInnerX,
             pageManager.curY,
-            totalWidth.toInt(),
+            summaryInnerWidth,
             summaryHeaderPaint,
             Layout.Alignment.ALIGN_NORMAL
         )
-        pageManager.curY += 26f
-
-        val bulletIndentRight = 6f
-        val summaryWidth = (totalWidth - bulletIndentRight).toInt()
+        pageManager.curY += 29f
 
         fun drawBulletedSummaryLine(label: String, value: String) {
             val span = buildLabelValueSpan(
@@ -921,13 +1066,13 @@ object PdfReportGenerator {
             drawBidiText(
                 canvas = canvas,
                 text = span,
-                x = tableLeft,
+                x = summaryInnerX,
                 y = pageManager.curY,
-                width = summaryWidth,
+                width = summaryInnerWidth,
                 textPaint = summaryLinePaint,
                 align = Layout.Alignment.ALIGN_NORMAL
             )
-            pageManager.curY += 23f
+            pageManager.curY += 26f
         }
 
         drawBulletedSummaryLine("إجمالي المبالغ المستحقة لي:", "${formatAmount(totalOwedToMe)} $currencySymbol")

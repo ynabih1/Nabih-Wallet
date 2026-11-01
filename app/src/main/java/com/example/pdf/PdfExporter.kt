@@ -183,7 +183,7 @@ object PdfExporter {
             Log.e(TAG, "Failed to open PDF: ${e.message}", e)
             Toast.makeText(
                 context,
-                "تم حفظ الملف في مجلد التنزيلات (Downloads). يرجى فتح مدير الملفات أو تثبيت قارئ PDF.",
+                "تم حفظ الملف في مجلد التنزيلات. يرجى فتح مدير الملفات أو تثبيت قارئ PDF.",
                 Toast.LENGTH_LONG
             ).show()
         }

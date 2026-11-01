@@ -3,6 +3,7 @@ package com.example.data.backup
 import android.content.ContentValues
 import android.content.Context
 import android.content.Intent
+import android.media.MediaScannerConnection
 import android.net.Uri
 import android.os.Build
 import android.os.Environment
@@ -12,7 +13,9 @@ import com.example.data.local.entity.DebtEntity
 import com.example.data.local.entity.DebtPaymentEntity
 import com.example.data.local.entity.TransactionEntity
 import com.example.model.CategoryItem
+import com.example.model.FinancialConstants
 import com.example.model.IconLibrary
+import com.example.ui.components.MonthlyCalculationUtils
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
@@ -28,11 +31,61 @@ data class BackupPackage(
     val debts: List<DebtEntity>,
     val debtPayments: List<DebtPaymentEntity>,
     val customCategories: List<CategoryItem>,
-    val categoryIcons: Map<String, String>,
-    val monthlyBudget: Double
+    val categoryIcons: Map<String, String>
+)
+
+data class BackupExportResult(
+    val fileName: String,
+    val localFile: File,
+    val savedToPublicDownloads: Boolean
 )
 
 object BackupManager {
+
+    /**
+     * Consolidates duplicate transactions of the same type and category within the same month.
+     */
+    fun consolidateSameMonthTransactions(transactions: List<TransactionEntity>): List<TransactionEntity> {
+        val grouped = transactions.groupBy { tx ->
+            val normalizedCat = FinancialConstants.normalizeCategoryName(tx.category)
+            val ym = MonthlyCalculationUtils.getYearMonth(tx.dateMillis)
+            Triple(tx.type, normalizedCat, ym)
+        }
+
+        val consolidated = mutableListOf<TransactionEntity>()
+        for ((key, group) in grouped) {
+            val normalizedCat = key.second
+            if (group.size == 1) {
+                val single = group.first()
+                consolidated.add(
+                    single.copy(
+                        category = normalizedCat,
+                        endDateMillis = null
+                    )
+                )
+            } else {
+                val primary = group.maxByOrNull { it.dateMillis } ?: group.first()
+                val totalAmount = group.sumOf { it.amount }
+                val latestDate = group.maxOf { it.dateMillis }
+                val mergedNotes = group.map { it.notes.trim() }
+                    .filter { it.isNotBlank() }
+                    .distinct()
+                    .joinToString(" | ")
+                val anyPinned = group.any { it.isPinned }
+                consolidated.add(
+                    primary.copy(
+                        category = normalizedCat,
+                        amount = totalAmount,
+                        dateMillis = latestDate,
+                        endDateMillis = null,
+                        notes = mergedNotes,
+                        isPinned = anyPinned
+                    )
+                )
+            }
+        }
+        return consolidated.sortedByDescending { it.dateMillis }
+    }
 
     /**
      * Builds the standardized JSON string for backup package.
@@ -42,8 +95,7 @@ object BackupManager {
         debts: List<DebtEntity>,
         debtPayments: List<DebtPaymentEntity>,
         customCategories: List<CategoryItem>,
-        categoryIcons: Map<String, String>,
-        monthlyBudget: Double
+        categoryIcons: Map<String, String>
     ): String {
         val rootJson = JSONObject()
         val now = System.currentTimeMillis()
@@ -51,7 +103,7 @@ object BackupManager {
         val fullDateStr = fullDateFormat.format(Date(now))
 
         rootJson.put("app", "Nabih Wallet")
-        rootJson.put("schemaVersion", 1)
+        rootJson.put("schemaVersion", 2)
         rootJson.put("exportDate", fullDateStr)
         rootJson.put("exportTimestamp", now)
 
@@ -62,10 +114,9 @@ object BackupManager {
                 put("id", tx.id)
                 put("type", tx.type)
                 put("amount", tx.amount)
-                put("category", tx.category)
+                put("category", FinancialConstants.normalizeCategoryName(tx.category))
                 put("paymentMethod", tx.paymentMethod)
                 put("dateMillis", tx.dateMillis)
-                if (tx.endDateMillis != null) put("endDateMillis", tx.endDateMillis)
                 put("notes", tx.notes)
                 put("isPinned", tx.isPinned)
                 put("receiptUri", tx.receiptUri ?: "")
@@ -131,14 +182,11 @@ object BackupManager {
         }
         rootJson.put("categoryIcons", iconsObj)
 
-        // Monthly budget
-        rootJson.put("monthlyBudget", monthlyBudget)
-
         return rootJson.toString(2)
     }
 
     /**
-     * Exports all user data to a formatted JSON file in Downloads folder.
+     * Exports all user data to a formatted JSON file in Downloads folder AND internal backup storage.
      */
     fun exportBackup(
         context: Context,
@@ -146,43 +194,126 @@ object BackupManager {
         debts: List<DebtEntity>,
         debtPayments: List<DebtPaymentEntity>,
         customCategories: List<CategoryItem>,
-        categoryIcons: Map<String, String>,
-        monthlyBudget: Double
-    ): Result<String> {
+        categoryIcons: Map<String, String>
+    ): Result<BackupExportResult> {
         return try {
+            val appContext = context.applicationContext
             val now = System.currentTimeMillis()
-            val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.US)
+            val dateFormat = SimpleDateFormat("yyyy-MM-dd_HH-mm-ss", Locale.US)
             val dateStr = dateFormat.format(Date(now))
             val jsonString = buildBackupJsonString(
-                transactions, debts, debtPayments, customCategories, categoryIcons, monthlyBudget
+                transactions, debts, debtPayments, customCategories, categoryIcons
             )
 
             val fileName = "Nabih_Wallet_Backup_$dateStr.json"
-            val tempFile = File(context.cacheDir, fileName)
-            FileOutputStream(tempFile).use { fos ->
+
+            // 1. Always save a guaranteed local copy inside app storage (works on all Android versions with 0 permissions)
+            val backupsDir = File(appContext.filesDir, "backups").apply { if (!exists()) mkdirs() }
+            val latestInternalFile = File(backupsDir, "latest_backup.json")
+            FileOutputStream(latestInternalFile).use { fos ->
                 fos.write(jsonString.toByteArray(Charsets.UTF_8))
                 fos.flush()
             }
 
-            // Save copy to Downloads
-            saveFileToDownloads(context, tempFile, fileName, "application/json")
-            Result.success(fileName)
+            val externalAppDownloads = appContext.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS) ?: backupsDir
+            if (!externalAppDownloads.exists()) externalAppDownloads.mkdirs()
+            val localBackupFile = File(externalAppDownloads, fileName)
+            FileOutputStream(localBackupFile).use { fos ->
+                fos.write(jsonString.toByteArray(Charsets.UTF_8))
+                fos.flush()
+            }
+
+            // 2. Also save to public Downloads folder
+            val savedToPublic = saveFileToDownloads(appContext, localBackupFile, fileName, "application/json")
+
+            Result.success(
+                BackupExportResult(
+                    fileName = fileName,
+                    localFile = localBackupFile,
+                    savedToPublicDownloads = savedToPublic
+                )
+            )
         } catch (e: Exception) {
             e.printStackTrace()
             Result.failure(e)
         }
     }
 
+    /**
+     * Writes backup JSON directly to a user-chosen document URI (from CreateDocument launcher).
+     */
+    fun exportBackupToUri(
+        context: Context,
+        targetUri: Uri,
+        transactions: List<TransactionEntity>,
+        debts: List<DebtEntity>,
+        debtPayments: List<DebtPaymentEntity>,
+        customCategories: List<CategoryItem>,
+        categoryIcons: Map<String, String>
+    ): Result<Unit> {
+        return try {
+            val appContext = context.applicationContext
+            val jsonString = buildBackupJsonString(
+                transactions, debts, debtPayments, customCategories, categoryIcons
+            )
+            appContext.contentResolver.openOutputStream(targetUri)?.use { os ->
+                os.write(jsonString.toByteArray(Charsets.UTF_8))
+                os.flush()
+            } ?: return Result.failure(Exception("تعذر فتح الملف للكتابة"))
+            Result.success(Unit)
+        } catch (e: Exception) {
+            e.printStackTrace()
+            Result.failure(e)
+        }
+    }
+
+    /**
+     * Shares the exported backup file via Android Share Sheet so user can send or save it anywhere.
+     */
+    fun shareBackupFile(context: Context, file: File) {
+        try {
+            val uri = FileProvider.getUriForFile(
+                context.applicationContext,
+                "${context.applicationContext.packageName}.fileprovider",
+                file
+            )
+            val shareIntent = Intent(Intent.ACTION_SEND).apply {
+                type = "application/json"
+                putExtra(Intent.EXTRA_STREAM, uri)
+                putExtra(Intent.EXTRA_SUBJECT, file.name)
+                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            }
+            val chooser = Intent.createChooser(shareIntent, "مشاركة النسخة الاحتياطية").apply {
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+            context.startActivity(chooser)
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+    }
 
     /**
      * Validates and parses the backup JSON file from a given content URI.
      */
     fun parseAndValidateBackup(context: Context, uri: Uri): Result<BackupPackage> {
         return try {
-            val rawContent = context.contentResolver.openInputStream(uri)?.use { stream ->
+            val appContext = context.applicationContext
+            val rawContent = appContext.contentResolver.openInputStream(uri)?.use { stream ->
                 stream.bufferedReader(Charsets.UTF_8).readText()
             } ?: return Result.failure(Exception("تعذر قراءة محتوى الملف المختار"))
 
+            parseBackupJsonString(rawContent)
+        } catch (e: Exception) {
+            e.printStackTrace()
+            Result.failure(Exception("تعذر قراءة النسخة: ${e.localizedMessage ?: "تنسيق غير صالح"}"))
+        }
+    }
+
+    /**
+     * Parses and validates backup JSON content directly from a String.
+     */
+    fun parseBackupJsonString(rawContent: String): Result<BackupPackage> {
+        return try {
             val content = rawContent.removePrefix("\uFEFF").trim()
             if (content.isBlank()) {
                 return Result.failure(Exception("ملف النسخة الاحتياطية فارغ"))
@@ -210,70 +341,86 @@ object BackupManager {
             val exportDate = root.optString("exportDate", SimpleDateFormat("yyyy/MM/dd", Locale.US).format(Date()))
             val exportTimestamp = root.optLong("exportTimestamp", System.currentTimeMillis())
 
-            // Parse Transactions
-            val transactions = mutableListOf<TransactionEntity>()
+            // Parse Transactions (single day only, no date ranges, and consolidate same-month duplicates)
+            val rawTransactions = mutableListOf<TransactionEntity>()
             val txArr = root.optJSONArray("transactions")
             if (txArr != null) {
                 for (i in 0 until txArr.length()) {
                     val obj = txArr.getJSONObject(i)
-                    transactions.add(
+                    val rawCat = obj.optString("category", "")
+                    rawTransactions.add(
                         TransactionEntity(
-                            id = obj.optLong("id", 0L),
+                            id = 0L, // Let Room auto-generate fresh IDs on restore to prevent primary key conflicts
                             type = obj.optString("type", "EXPENSE"),
                             amount = obj.optDouble("amount", 0.0),
-                            category = obj.optString("category", ""),
+                            category = FinancialConstants.normalizeCategoryName(rawCat),
                             paymentMethod = obj.optString("paymentMethod", ""),
                             dateMillis = obj.optLong("dateMillis", System.currentTimeMillis()),
-                            endDateMillis = if (obj.has("endDateMillis") && !obj.isNull("endDateMillis")) obj.optLong("endDateMillis") else null,
+                            endDateMillis = null,
                             notes = obj.optString("notes", ""),
                             isPinned = obj.optBoolean("isPinned", false),
-                            receiptUri = obj.optString("receiptUri", "").takeIf { it.isNotBlank() },
-                            receiptMimeType = obj.optString("receiptMimeType", "").takeIf { it.isNotBlank() }
+                            receiptUri = null,
+                            receiptMimeType = null
                         )
                     )
                 }
             }
+            val transactions = consolidateSameMonthTransactions(rawTransactions)
 
-            // Parse Debts
+            // Parse Debts (ensure every debt has a unique positive ID so foreign keys from debt_payments never fail)
             val debts = mutableListOf<DebtEntity>()
             val debtArr = root.optJSONArray("debts")
+            val usedDebtIds = mutableSetOf<Long>()
+            var nextGeneratedDebtId = 1L
             if (debtArr != null) {
                 for (i in 0 until debtArr.length()) {
                     val obj = debtArr.getJSONObject(i)
                     val dueDate = if (obj.has("dueDateMillis") && !obj.isNull("dueDateMillis")) {
                         obj.optLong("dueDateMillis")
                     } else null
+                    var debtId = obj.optLong("id", 0L)
+                    if (debtId <= 0L || debtId in usedDebtIds) {
+                        while (nextGeneratedDebtId in usedDebtIds) {
+                            nextGeneratedDebtId++
+                        }
+                        debtId = nextGeneratedDebtId
+                    }
+                    usedDebtIds.add(debtId)
+
                     debts.add(
                         DebtEntity(
-                            id = obj.optLong("id", 0L),
+                            id = debtId,
                             type = obj.optString("type", "OWED_TO_ME"),
                             personName = obj.optString("personName", "شخص"),
                             totalAmount = obj.optDouble("totalAmount", 0.0),
                             lentDateMillis = obj.optLong("lentDateMillis", System.currentTimeMillis()),
                             dueDateMillis = dueDate,
                             notes = obj.optString("notes", ""),
-                            enableReminder = obj.optBoolean("enableReminder", false),
+                            enableReminder = false,
                             status = obj.optString("status", "UNPAID")
                         )
                     )
                 }
             }
 
-            // Parse Debt Payments
+            // Parse Debt Payments (only include payments whose debtId exists in usedDebtIds to avoid ForeignKey crash)
             val payments = mutableListOf<DebtPaymentEntity>()
             val payArr = root.optJSONArray("debtPayments")
             if (payArr != null) {
                 for (i in 0 until payArr.length()) {
                     val obj = payArr.getJSONObject(i)
-                    payments.add(
-                        DebtPaymentEntity(
-                            id = obj.optLong("id", 0L),
-                            debtId = obj.optLong("debtId", 0L),
-                            amount = obj.optDouble("amount", 0.0),
-                            paymentDateMillis = obj.optLong("paymentDateMillis", System.currentTimeMillis()),
-                            note = obj.optString("note", "")
+                    val debtId = obj.optLong("debtId", 0L)
+                    if (debtId in usedDebtIds) {
+                        payments.add(
+                            DebtPaymentEntity(
+                                id = 0L, // Auto-generate payment ID cleanly
+                                debtId = debtId,
+                                amount = obj.optDouble("amount", 0.0),
+                                paymentDateMillis = obj.optLong("paymentDateMillis", System.currentTimeMillis()),
+                                note = obj.optString("note", "")
+                            )
                         )
-                    )
+                    }
                 }
             }
 
@@ -312,8 +459,6 @@ object BackupManager {
                 }
             }
 
-            val monthlyBudget = root.optDouble("monthlyBudget", 0.0)
-
             val pkg = BackupPackage(
                 exportDate = exportDate,
                 exportTimestamp = exportTimestamp,
@@ -321,8 +466,7 @@ object BackupManager {
                 debts = debts,
                 debtPayments = payments,
                 customCategories = customCats,
-                categoryIcons = categoryIcons,
-                monthlyBudget = monthlyBudget
+                categoryIcons = categoryIcons
             )
             Result.success(pkg)
         } catch (e: Exception) {
@@ -348,7 +492,11 @@ object BackupManager {
             }
 
             val resolver = context.contentResolver
-            val uri = resolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, values)
+            val uri = try {
+                resolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, values)
+            } catch (e: Exception) {
+                null
+            }
 
             if (uri != null) {
                 try {
@@ -377,13 +525,14 @@ object BackupManager {
 
         if (!writeSucceeded) {
             try {
+                @Suppress("DEPRECATION")
                 val downloadsDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
                 if (!downloadsDir.exists()) downloadsDir.mkdirs()
                 val destFile = File(downloadsDir, fileName)
                 sourceFile.copyTo(destFile, overwrite = true)
                 if (destFile.exists() && destFile.length() > 0) {
                     writeSucceeded = true
-                    android.media.MediaScannerConnection.scanFile(
+                    MediaScannerConnection.scanFile(
                         context,
                         arrayOf(destFile.absolutePath),
                         arrayOf(mimeType),
