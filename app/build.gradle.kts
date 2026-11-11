@@ -14,7 +14,7 @@ android {
   compileSdk { version = release(36) { minorApiLevel = 1 } }
 
   defaultConfig {
-    applicationId = "com.aistudio.nabihwallet.ptqxnm"
+    applicationId = "com.youssefnabih.nabihwallet"
     minSdk = 24
     targetSdk = 36
     versionCode = 2
