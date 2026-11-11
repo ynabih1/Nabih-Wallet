@@ -21,6 +21,7 @@ import java.io.FileOutputStream
 object PdfExporter {
 
     private const val TAG = "PdfExporter"
+    private const val PDF_MIME_TYPE = "application/pdf"
 
     sealed class SaveResult {
         data class Success(val uri: Uri, val fileName: String, val bytes: Long, val file: File? = null) : SaveResult()
@@ -29,7 +30,6 @@ object PdfExporter {
 
     /**
      * Saves the PDF file directly to the system Downloads folder.
-     * Uses MediaStore API on Android 10+ (Q+), with fallbacks for legacy/OEM versions.
      */
     fun saveToDownloads(context: Context, sourceFile: File, targetFileName: String): SaveResult {
         Log.d(TAG, "Starting saveToDownloads for file: $targetFileName, source: ${sourceFile.absolutePath}")
@@ -42,17 +42,16 @@ object PdfExporter {
 
         val resolver = context.contentResolver
 
-        // 1. Primary Strategy: MediaStore API for Android 10+ (Build.VERSION_CODES.Q and above)
+        // 1. Primary Strategy: MediaStore API for Android 10+ (Q+)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             try {
                 val contentValues = ContentValues().apply {
                     put(MediaStore.MediaColumns.DISPLAY_NAME, targetFileName)
-                    put(MediaStore.MediaColumns.MIME_TYPE, "application/pdf")
+                    put(MediaStore.MediaColumns.MIME_TYPE, PDF_MIME_TYPE)
                     put(MediaStore.MediaColumns.RELATIVE_PATH, Environment.DIRECTORY_DOWNLOADS)
                     put(MediaStore.MediaColumns.IS_PENDING, 1)
                 }
 
-                // Standard Downloads collection URI
                 val collectionUri = MediaStore.Downloads.EXTERNAL_CONTENT_URI
                 val targetUri = resolver.insert(collectionUri, contentValues)
 
@@ -66,7 +65,6 @@ object PdfExporter {
                     }
 
                     if (bytesCopied > 0) {
-                        // Crucial for phone downloads: clear IS_PENDING so the file appears immediately in Downloads
                         val updateValues = ContentValues().apply {
                             put(MediaStore.MediaColumns.IS_PENDING, 0)
                         }
@@ -106,7 +104,7 @@ object PdfExporter {
                     MediaScannerConnection.scanFile(
                         context,
                         arrayOf(destFile.absolutePath),
-                        arrayOf("application/pdf"),
+                        arrayOf(PDF_MIME_TYPE),
                         null
                     )
 
@@ -124,7 +122,7 @@ object PdfExporter {
             Log.w(TAG, "Public downloads direct copy failed: ${e.message}", e)
         }
 
-        // 3. Guaranteed Safe Fallback: App External Files directory (Never fails on any Android version)
+        // 3. Guaranteed Safe Fallback: App External Files directory
         try {
             val appDownloadsDir = context.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS) ?: context.filesDir
             val safeFile = File(appDownloadsDir, targetFileName)
@@ -141,14 +139,14 @@ object PdfExporter {
             Log.d(TAG, "Guaranteed fallback save successful: $safeFile")
             return SaveResult.Success(uri, targetFileName, bytesCopied, safeFile)
         } catch (e: Exception) {
-            val errorMsg = "فشل حفظ الملف: ${e.localizedMessage ?: e.message}"
+            val errorMsg = "فشل حفظ ملف PDF: ${e.localizedMessage ?: e.message}"
             Log.e(TAG, errorMsg, e)
             return SaveResult.Failure(errorMsg)
         }
     }
 
     /**
-     * Opens the PDF file using an external viewer app (Google Drive, Acrobat, etc.).
+     * Opens the PDF file using an external viewer app.
      */
     fun openPdf(context: Context, uri: Uri, sourceFile: File? = null) {
         try {
@@ -163,7 +161,7 @@ object PdfExporter {
             }
 
             val intent = Intent(Intent.ACTION_VIEW).apply {
-                setDataAndType(viewUri, "application/pdf")
+                setDataAndType(viewUri, PDF_MIME_TYPE)
                 addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
                 addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             }
@@ -201,7 +199,7 @@ object PdfExporter {
             )
 
             val shareIntent = Intent(Intent.ACTION_SEND).apply {
-                type = "application/pdf"
+                type = PDF_MIME_TYPE
                 putExtra(Intent.EXTRA_STREAM, uri)
                 putExtra(Intent.EXTRA_SUBJECT, title)
                 addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
@@ -247,7 +245,7 @@ object PdfExporter {
                 } catch (e: Exception) {
                     Uri.fromFile(pdfFile)
                 }
-                SaveResult.Success(uri, pdfFile.name, pdfFile.length())
+                SaveResult.Success(uri, pdfFile.name, pdfFile.length(), pdfFile)
             } else {
                 saveToDownloads(context, pdfFile, pdfFile.name)
             }
@@ -281,7 +279,7 @@ object PdfExporter {
                 } catch (e: Exception) {
                     Uri.fromFile(pdfFile)
                 }
-                SaveResult.Success(uri, pdfFile.name, pdfFile.length())
+                SaveResult.Success(uri, pdfFile.name, pdfFile.length(), pdfFile)
             } else {
                 saveToDownloads(context, pdfFile, pdfFile.name)
             }
@@ -290,4 +288,3 @@ object PdfExporter {
         }
     }
 }
-

@@ -2,20 +2,13 @@ package com.example.ui.settings
 
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
-import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -28,44 +21,22 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.Backup
-import androidx.compose.material.icons.filled.Category
-import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.DeleteOutline
-import androidx.compose.material.icons.filled.Download
-import androidx.compose.material.icons.filled.Edit
-import androidx.compose.material.icons.filled.Lock
-import androidx.compose.material.icons.filled.Palette
-import androidx.compose.material.icons.filled.Password
-import androidx.compose.material.icons.filled.Refresh
-import androidx.compose.material.icons.filled.Security
-import androidx.compose.material.icons.filled.TrendingDown
-import androidx.compose.material.icons.filled.TrendingUp
-import androidx.compose.material.icons.filled.Upload
-import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.ui.text.input.KeyboardType
-import androidx.compose.ui.text.input.PasswordVisualTransformation
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.OutlinedTextFieldDefaults
+import androidx.compose.material.icons.outlined.Backup
+import androidx.compose.material.icons.outlined.DeleteOutline
+import androidx.compose.material.icons.outlined.Download
+import androidx.compose.material.icons.outlined.Palette
+import androidx.compose.material.icons.outlined.Upload
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
-import androidx.compose.material3.Switch
-import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
-import com.example.ui.category.CategoryManagementDialog
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -82,21 +53,18 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.data.backup.BackupPackage
-import com.example.model.CategoryItem
-import com.example.model.FinancialConstants
-import com.example.model.IconCategoryGroup
-import com.example.model.IconLibrary
 import com.example.ui.WalletViewModel
-import com.example.ui.theme.BorderSubtle
-import com.example.ui.theme.BurntOrangePrimary
-import com.example.ui.theme.MutedExpenseLight
-import com.example.ui.theme.MutedExpenseTerracotta
-import com.example.ui.theme.MutedIncomeGreen
-import com.example.ui.theme.MutedIncomeGreenLight
-import com.example.ui.theme.TextPrimaryDark
-import com.example.ui.theme.TextSecondaryBrown
-import com.example.ui.theme.WarmBackground
-import com.example.ui.theme.WarmCardSurface
+import com.example.ui.category.CategoryManagementDialog
+import com.example.ui.theme.AppBackground
+import com.example.ui.theme.CardSurface
+import com.example.ui.theme.DividerBorderColor
+import com.example.ui.theme.ElevatedSurface
+import com.example.ui.theme.ExpenseRed
+import com.example.ui.theme.OnSpotifyGreen
+import com.example.ui.theme.SpotifyGreen
+import com.example.ui.theme.TextPrimary
+import com.example.ui.theme.TextSecondary
+import com.example.ui.theme.XBlue
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -118,7 +86,6 @@ fun SettingsScreen(
     var pendingRestorePackage by remember { mutableStateOf<BackupPackage?>(null) }
 
     var showCategoryManagementDialog by remember { mutableStateOf(false) }
-    var showClearDataConfirmDialog by remember { mutableStateOf(false) }
 
     val expenseCategories = remember(customCategories, categoryIcons) {
         viewModel.getAllExpenseCategories()
@@ -147,44 +114,31 @@ fun SettingsScreen(
         }
     }
 
-    val saveBackupDocumentLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.CreateDocument("application/json")
-    ) { uri ->
-        if (uri != null) {
-            viewModel.exportBackupToUri(uri)
-        }
-    }
-
     LazyColumn(
         modifier = modifier
             .fillMaxSize()
+            .background(AppBackground)
             .padding(horizontal = 16.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
         item {
-            Spacer(modifier = Modifier.height(10.dp))
-            Text(
-                text = if (isArabic) "الإعدادات" else "Settings",
-                style = MaterialTheme.typography.headlineSmall,
-                fontWeight = FontWeight.Bold,
-                color = TextPrimaryDark
-            )
+            Spacer(modifier = Modifier.height(6.dp))
         }
 
         // 1. Categories Card (الفئات)
         item {
             SettingsSectionCard(
                 title = if (isArabic) "الفئات" else "Categories",
-                icon = Icons.Default.Palette
+                icon = Icons.Outlined.Palette
             ) {
                 Column(
                     modifier = Modifier.fillMaxWidth(),
                     verticalArrangement = Arrangement.spacedBy(14.dp)
                 ) {
                     Text(
-                        text = if (isArabic) "تخصيص أيقونات وأسماء فئات المصروفات والدخل" else "Customize icons and names of expense and income categories",
+                        text = if (isArabic) "تخصيص الأسماء والأيقونات" else "Customize names and icons",
                         style = MaterialTheme.typography.bodySmall,
-                        color = TextSecondaryBrown
+                        color = TextSecondary
                     )
 
                     Button(
@@ -193,19 +147,18 @@ fun SettingsScreen(
                             .fillMaxWidth()
                             .height(48.dp)
                             .testTag("manage_categories_btn"),
-                        shape = RoundedCornerShape(12.dp),
+                        shape = CircleShape,
                         colors = ButtonDefaults.buttonColors(
-                            containerColor = Color(0xFFF3F1EC),
-                            contentColor = TextPrimaryDark
+                            containerColor = SpotifyGreen,
+                            contentColor = OnSpotifyGreen
                         ),
-                        border = BorderStroke(1.dp, BorderSubtle),
                         elevation = ButtonDefaults.buttonElevation(defaultElevation = 0.dp)
                     ) {
                         Text(
                             text = if (isArabic) "إدارة وتخصيص الفئات" else "Manage & Customize Categories",
                             style = MaterialTheme.typography.bodyMedium,
                             fontWeight = FontWeight.Bold,
-                            color = TextPrimaryDark
+                            color = OnSpotifyGreen
                         )
                     }
                 }
@@ -216,13 +169,13 @@ fun SettingsScreen(
         item {
             SettingsSectionCard(
                 title = if (isArabic) "النسخ الاحتياطي" else "Backup & Restore",
-                icon = Icons.Default.Backup
+                icon = Icons.Outlined.Backup
             ) {
                 // Export Backup Row
                 Surface(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .clip(RoundedCornerShape(12.dp))
+                        .clip(RoundedCornerShape(8.dp))
                         .clickable(enabled = !isBackingUp && !isRestoring) {
                             viewModel.exportBackup(context)
                         },
@@ -231,62 +184,38 @@ fun SettingsScreen(
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(vertical = 8.dp),
+                            .padding(vertical = 10.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Box(
-                            modifier = Modifier
-                                .size(42.dp)
-                                .clip(RoundedCornerShape(12.dp))
-                                .background(BurntOrangePrimary),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            if (isBackingUp) {
-                                CircularProgressIndicator(
-                                    modifier = Modifier.size(18.dp),
-                                    color = Color.White,
-                                    strokeWidth = 2.dp
-                                )
-                            } else {
-                                Icon(
-                                    imageVector = Icons.Default.Download,
-                                    contentDescription = null,
-                                    tint = Color.White,
-                                    modifier = Modifier.size(20.dp)
-                                )
-                            }
+                        if (isBackingUp) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(24.dp),
+                                color = XBlue,
+                                strokeWidth = 2.dp
+                            )
+                        } else {
+                            Icon(
+                                imageVector = Icons.Outlined.Download,
+                                contentDescription = null,
+                                tint = TextSecondary,
+                                modifier = Modifier.size(24.dp)
+                            )
                         }
 
-                        Spacer(modifier = Modifier.width(12.dp))
+                        Spacer(modifier = Modifier.width(14.dp))
 
                         Column(modifier = Modifier.weight(1f)) {
                             Text(
                                 text = if (isArabic) "تصدير نسخة احتياطية" else "Export Backup",
                                 style = MaterialTheme.typography.bodyLarge,
                                 fontWeight = FontWeight.SemiBold,
-                                color = TextPrimaryDark
+                                color = TextPrimary
                             )
                             Text(
-                                text = if (isArabic) "حفظ نسخة من معاملاتك وديونك على الجهاز" else "Save a copy of your transactions and debts",
+                                text = if (isArabic) "حفظ البيانات على الجهاز" else "Save data to device",
                                 style = MaterialTheme.typography.bodySmall,
-                                color = TextSecondaryBrown,
+                                color = TextSecondary,
                                 fontSize = 11.5.sp
-                            )
-                        }
-
-                        TextButton(
-                            enabled = !isBackingUp && !isRestoring,
-                            onClick = {
-                                val sdf = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US)
-                                val fileName = "Nabih_Wallet_Backup_${sdf.format(java.util.Date())}.json"
-                                saveBackupDocumentLauncher.launch(fileName)
-                            }
-                        ) {
-                            Text(
-                                text = if (isArabic) "حفظ كملف" else "Save as",
-                                fontSize = 11.5.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = BurntOrangePrimary
                             )
                         }
                     }
@@ -294,14 +223,15 @@ fun SettingsScreen(
 
                 HorizontalDivider(
                     modifier = Modifier.padding(vertical = 6.dp),
-                    color = BorderSubtle.copy(alpha = 0.6f)
+                    color = DividerBorderColor,
+                    thickness = 0.6.dp
                 )
 
                 // Restore Backup Row
                 Surface(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .clip(RoundedCornerShape(12.dp))
+                        .clip(RoundedCornerShape(8.dp))
                         .clickable(enabled = !isBackingUp && !isRestoring) {
                             pickBackupLauncher.launch(arrayOf("*/*"))
                         },
@@ -310,45 +240,37 @@ fun SettingsScreen(
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(vertical = 8.dp),
+                            .padding(vertical = 10.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Box(
-                            modifier = Modifier
-                                .size(42.dp)
-                                .clip(RoundedCornerShape(12.dp))
-                                .background(Color(0xFF4A5568)),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            if (isRestoring) {
-                                CircularProgressIndicator(
-                                    modifier = Modifier.size(18.dp),
-                                    color = Color.White,
-                                    strokeWidth = 2.dp
-                                )
-                            } else {
-                                Icon(
-                                    imageVector = Icons.Default.Upload,
-                                    contentDescription = null,
-                                    tint = Color.White,
-                                    modifier = Modifier.size(20.dp)
-                                )
-                            }
+                        if (isRestoring) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(24.dp),
+                                color = XBlue,
+                                strokeWidth = 2.dp
+                            )
+                        } else {
+                            Icon(
+                                imageVector = Icons.Outlined.Upload,
+                                contentDescription = null,
+                                tint = TextSecondary,
+                                modifier = Modifier.size(24.dp)
+                            )
                         }
 
-                        Spacer(modifier = Modifier.width(12.dp))
+                        Spacer(modifier = Modifier.width(14.dp))
 
                         Column(modifier = Modifier.weight(1f)) {
                             Text(
                                 text = if (isArabic) "استعادة نسخة احتياطية" else "Restore Backup",
                                 style = MaterialTheme.typography.bodyLarge,
                                 fontWeight = FontWeight.SemiBold,
-                                color = TextPrimaryDark
+                                color = TextPrimary
                             )
                             Text(
-                                text = if (isArabic) "استرجاع البيانات من ملف نسخة احتياطية سابق" else "Restore data from a previous backup file",
+                                text = if (isArabic) "استرجاع البيانات المحفوظة" else "Restore saved data",
                                 style = MaterialTheme.typography.bodySmall,
-                                color = TextSecondaryBrown,
+                                color = TextSecondary,
                                 fontSize = 11.5.sp
                             )
                         }
@@ -361,36 +283,36 @@ fun SettingsScreen(
         item {
             SettingsSectionCard(
                 title = if (isArabic) "إعادة ضبط البيانات" else "Reset Data",
-                icon = Icons.Default.DeleteOutline
+                icon = Icons.Outlined.DeleteOutline
             ) {
                 Column(
                     modifier = Modifier.fillMaxWidth(),
                     verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
                     Text(
-                        text = if (isArabic) "حذف جميع السجلات والمعاملات والبدء بمحفظة جديدة تماماً" else "Delete all records and transactions and start fresh",
+                        text = if (isArabic) "حذف كافة البيانات المسجلة" else "Delete all recorded data",
                         style = MaterialTheme.typography.bodySmall,
-                        color = TextSecondaryBrown
+                        color = TextSecondary
                     )
 
                     OutlinedButton(
-                        onClick = { showClearDataConfirmDialog = true },
+                        onClick = { viewModel.clearAllData() },
                         modifier = Modifier
                             .fillMaxWidth()
                             .height(48.dp)
                             .testTag("clear_all_data_btn"),
-                        shape = RoundedCornerShape(12.dp),
+                        shape = CircleShape,
                         colors = ButtonDefaults.outlinedButtonColors(
-                            containerColor = MutedExpenseTerracotta.copy(alpha = 0.05f),
-                            contentColor = MutedExpenseTerracotta
+                            containerColor = Color.Transparent,
+                            contentColor = ExpenseRed
                         ),
-                        border = BorderStroke(1.dp, MutedExpenseTerracotta.copy(alpha = 0.35f))
+                        border = BorderStroke(1.dp, DividerBorderColor)
                     ) {
                         Text(
                             text = if (isArabic) "مسح كافة البيانات" else "Clear All Data",
                             style = MaterialTheme.typography.bodyMedium,
                             fontWeight = FontWeight.Bold,
-                            color = MutedExpenseTerracotta
+                            color = ExpenseRed
                         )
                     }
                 }
@@ -398,7 +320,7 @@ fun SettingsScreen(
         }
 
         item {
-            Spacer(modifier = Modifier.height(80.dp))
+            Spacer(modifier = Modifier.height(112.dp))
         }
     }
 
@@ -406,10 +328,11 @@ fun SettingsScreen(
         val pkg = pendingRestorePackage!!
         AlertDialog(
             onDismissRequest = { showRestoreConfirmDialog = false },
+            containerColor = ElevatedSurface,
             title = {
                 Text(
                     text = if (isArabic) "استعادة نسخة احتياطية" else "Restore Backup",
-                    color = TextPrimaryDark,
+                    color = TextPrimary,
                     fontWeight = FontWeight.Bold
                 )
             },
@@ -428,7 +351,7 @@ fun SettingsScreen(
                             "• Transactions: ${pkg.transactions.size}\n" +
                             "• Debts: ${pkg.debts.size}\n\n" +
                             "Are you sure you want to proceed? This action cannot be undone.",
-                        color = TextSecondaryBrown,
+                        color = TextSecondary,
                         fontSize = 13.sp
                     )
                 }
@@ -439,14 +362,22 @@ fun SettingsScreen(
                         viewModel.restoreBackup(context, pkg)
                         showRestoreConfirmDialog = false
                     },
-                    colors = ButtonDefaults.buttonColors(containerColor = BurntOrangePrimary)
+                    shape = CircleShape,
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = SpotifyGreen,
+                        contentColor = OnSpotifyGreen
+                    )
                 ) {
-                    Text(if (isArabic) "استعادة واستبدال" else "Restore & Replace", color = Color.White)
+                    Text(if (isArabic) "استعادة واستبدال" else "Restore & Replace", color = OnSpotifyGreen, fontWeight = FontWeight.Bold)
                 }
             },
             dismissButton = {
-                TextButton(onClick = { showRestoreConfirmDialog = false }) {
-                    Text(if (isArabic) "إلغاء" else "Cancel", color = TextSecondaryBrown)
+                OutlinedButton(
+                    onClick = { showRestoreConfirmDialog = false },
+                    shape = CircleShape,
+                    border = BorderStroke(1.dp, DividerBorderColor)
+                ) {
+                    Text(if (isArabic) "إلغاء" else "Cancel", color = TextPrimary)
                 }
             }
         )
@@ -455,32 +386,35 @@ fun SettingsScreen(
     if (showRestoreErrorDialog) {
         AlertDialog(
             onDismissRequest = { showRestoreErrorDialog = false },
+            containerColor = ElevatedSurface,
             title = {
                 Text(
                     text = if (isArabic) "خطأ في ملف النسخة الاحتياطية" else "Invalid Backup File",
-                    color = MutedExpenseTerracotta,
+                    color = ExpenseRed,
                     fontWeight = FontWeight.Bold
                 )
             },
             text = {
                 Text(
                     text = restoreErrorMessage,
-                    color = TextSecondaryBrown,
+                    color = TextSecondary,
                     fontSize = 13.sp
                 )
             },
             confirmButton = {
                 Button(
                     onClick = { showRestoreErrorDialog = false },
-                    colors = ButtonDefaults.buttonColors(containerColor = BurntOrangePrimary)
+                    shape = CircleShape,
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = SpotifyGreen,
+                        contentColor = OnSpotifyGreen
+                    )
                 ) {
-                    Text(if (isArabic) "حسناً" else "OK", color = Color.White)
+                    Text(if (isArabic) "حسناً" else "OK", color = OnSpotifyGreen, fontWeight = FontWeight.Bold)
                 }
             }
         )
     }
-
-    // ==================== Category Management & Reset Data Dialogs ====================
 
     if (showCategoryManagementDialog) {
         CategoryManagementDialog(
@@ -503,46 +437,6 @@ fun SettingsScreen(
             }
         )
     }
-
-    if (showClearDataConfirmDialog) {
-        AlertDialog(
-            onDismissRequest = { showClearDataConfirmDialog = false },
-            title = {
-                Text(
-                    text = if (isArabic) "إعادة ضبط البيانات" else "Reset All Data",
-                    color = MutedExpenseTerracotta,
-                    fontWeight = FontWeight.Bold
-                )
-            },
-            text = {
-                Text(
-                    text = if (isArabic)
-                        "هل أنت متأكد تماماً من رغبتك في مسح كافة البيانات؟ سيتم حذف جميع المعاملات، الديون، وسجل السداد نهائياً والبدء من جديد. لا يمكن التراجع عن هذا الإجراء."
-                    else
-                        "Are you completely sure you want to reset all data? All transactions, debts, and payments will be permanently deleted. This cannot be undone.",
-                    color = TextPrimaryDark,
-                    style = MaterialTheme.typography.bodyMedium
-                )
-            },
-            confirmButton = {
-                Button(
-                    onClick = {
-                        viewModel.clearAllData()
-                        showClearDataConfirmDialog = false
-                    },
-                    colors = ButtonDefaults.buttonColors(containerColor = MutedExpenseTerracotta),
-                    shape = RoundedCornerShape(10.dp)
-                ) {
-                    Text(if (isArabic) "مسح كافة البيانات" else "Clear All Data", color = Color.White, fontWeight = FontWeight.Bold)
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { showClearDataConfirmDialog = false }) {
-                    Text(if (isArabic) "إلغاء" else "Cancel", color = TextSecondaryBrown)
-                }
-            }
-        )
-    }
 }
 
 @Composable
@@ -554,17 +448,15 @@ fun SettingsSectionCard(
 ) {
     Surface(
         modifier = modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(20.dp),
-        color = MaterialTheme.colorScheme.surface,
-        border = BorderStroke(0.8.dp, BorderSubtle),
-        shadowElevation = 0.5.dp
+        shape = RoundedCornerShape(12.dp),
+        color = CardSurface,
+        shadowElevation = 0.dp
     ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(horizontal = 16.dp, vertical = 16.dp)
         ) {
-            // Header: Title and Tinted Icon Badge
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -574,22 +466,14 @@ fun SettingsSectionCard(
                     text = title,
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold,
-                    color = TextPrimaryDark
+                    color = TextPrimary
                 )
-                Box(
-                    modifier = Modifier
-                        .size(36.dp)
-                        .clip(CircleShape)
-                        .background(BurntOrangePrimary.copy(alpha = 0.12f)),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        imageVector = icon,
-                        contentDescription = null,
-                        tint = BurntOrangePrimary,
-                        modifier = Modifier.size(19.dp)
-                    )
-                }
+                Icon(
+                    imageVector = icon,
+                    contentDescription = null,
+                    tint = TextSecondary,
+                    modifier = Modifier.size(24.dp)
+                )
             }
 
             Spacer(modifier = Modifier.height(12.dp))

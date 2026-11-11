@@ -16,7 +16,6 @@ import com.example.model.CategoryItem
 import com.example.model.DebtWithPayments
 import com.example.model.FinancialConstants
 import com.example.model.IconLibrary
-import com.example.model.toDebtRecord
 import com.example.pdf.PdfExporter
 import com.example.ui.components.DateFilterPreset
 import com.example.ui.components.DateFilterUtils
@@ -101,9 +100,6 @@ class WalletViewModel(application: Application) : AndroidViewModel(application) 
     private val _isGeneratingPdf = MutableStateFlow(false)
     val isGeneratingPdf: StateFlow<Boolean> = _isGeneratingPdf.asStateFlow()
 
-    private val _debtFilter = MutableStateFlow(DebtFilter.ALL)
-    val debtFilter: StateFlow<DebtFilter> = _debtFilter.asStateFlow()
-
     // Date Range Filter State
     private val _filterStartDate = MutableStateFlow<Long>(DateFilterUtils.getDefaultStartDate(emptyList()))
     val filterStartDate: StateFlow<Long> = _filterStartDate.asStateFlow()
@@ -153,6 +149,22 @@ class WalletViewModel(application: Application) : AndroidViewModel(application) 
     val recentTransactions: StateFlow<List<TransactionEntity>> = repository.recentTransactions
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
+    val totalIncome: StateFlow<Double> = allTransactions.combine(allTransactions) { list, _ ->
+        list.filter { it.type == "INCOME" }.sumOf { it.amount }
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0.0)
+
+    val totalExpense: StateFlow<Double> = allTransactions.combine(allTransactions) { list, _ ->
+        list.filter { it.type == "EXPENSE" }.sumOf { it.amount }
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0.0)
+
+    val totalBalance: StateFlow<Double> = combine(totalIncome, totalExpense) { inc, exp ->
+        inc - exp
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0.0)
+
+    // Debts State & Flows
+    private val _debtFilter = MutableStateFlow(DebtFilter.ALL)
+    val debtFilter: StateFlow<DebtFilter> = _debtFilter.asStateFlow()
+
     val allDebtsWithPayments: StateFlow<List<DebtWithPayments>> = repository.allDebtsWithPayments
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
@@ -167,18 +179,6 @@ class WalletViewModel(application: Application) : AndroidViewModel(application) 
         }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
-    val totalIncome: StateFlow<Double> = allTransactions.combine(allTransactions) { list, _ ->
-        list.filter { it.type == "INCOME" }.sumOf { it.amount }
-    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0.0)
-
-    val totalExpense: StateFlow<Double> = allTransactions.combine(allTransactions) { list, _ ->
-        list.filter { it.type == "EXPENSE" }.sumOf { it.amount }
-    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0.0)
-
-    val totalBalance: StateFlow<Double> = combine(totalIncome, totalExpense) { inc, exp ->
-        inc - exp
-    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0.0)
-
     val totalOwedToMe: StateFlow<Double> = allDebtsWithPayments.combine(allDebtsWithPayments) { list, _ ->
         list.filter { it.debt.type == "OWED_TO_ME" }.sumOf { it.remainingAmount }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0.0)
@@ -187,9 +187,13 @@ class WalletViewModel(application: Application) : AndroidViewModel(application) 
         list.filter { it.debt.type == "I_OWE" }.sumOf { it.remainingAmount }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0.0)
 
-    val netDebtBalance: StateFlow<Double> = combine(totalOwedToMe, totalIOwe) { owed, owe ->
-        owed - owe
+    val netDebtBalance: StateFlow<Double> = combine(totalOwedToMe, totalIOwe) { owedToMe, iOwe ->
+        owedToMe - iOwe
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0.0)
+
+    fun setDebtFilter(filter: DebtFilter) {
+        _debtFilter.value = filter
+    }
 
     init {
         FinancialConstants.setCustomIconOverrides(_categoryIcons.value)
@@ -264,10 +268,6 @@ class WalletViewModel(application: Application) : AndroidViewModel(application) 
                 }
             }
         }
-    }
-
-    fun setDebtFilter(filter: DebtFilter) {
-        _debtFilter.value = filter
     }
 
     fun setCurrency(newCurrency: String) {
@@ -521,31 +521,47 @@ class WalletViewModel(application: Application) : AndroidViewModel(application) 
         lentDateMillis: Long,
         dueDateMillis: Long?,
         notes: String,
-        enableReminder: Boolean
+        enableReminder: Boolean = false
     ) {
         viewModelScope.launch {
-            val entity = DebtEntity(
-                id = if (id > 0) id else 0,
-                type = type,
-                personName = personName,
-                totalAmount = totalAmount,
-                lentDateMillis = lentDateMillis,
-                dueDateMillis = dueDateMillis,
-                notes = notes,
-                enableReminder = enableReminder
-            )
+            val trimmedName = personName.trim()
+            val trimmedNotes = notes.trim()
             withContext(Dispatchers.IO) {
-                if (id > 0) {
+                if (id > 0L) {
+                    val existing = repository.getAllDebtsSync().find { it.id == id }
+                    val entity = DebtEntity(
+                        id = id,
+                        type = type,
+                        personName = trimmedName,
+                        totalAmount = totalAmount,
+                        lentDateMillis = lentDateMillis,
+                        dueDateMillis = dueDateMillis,
+                        notes = trimmedNotes,
+                        enableReminder = enableReminder,
+                        status = existing?.status ?: "UNPAID"
+                    )
                     repository.updateDebt(entity)
                 } else {
+                    val entity = DebtEntity(
+                        id = 0L,
+                        type = type,
+                        personName = trimmedName,
+                        totalAmount = totalAmount,
+                        lentDateMillis = lentDateMillis,
+                        dueDateMillis = dueDateMillis,
+                        notes = trimmedNotes,
+                        enableReminder = enableReminder,
+                        status = "UNPAID"
+                    )
                     repository.insertDebt(entity)
                 }
             }
-            if (id > 0) {
-                _feedback.emit(UserFeedback.Success("تم تعديل بيانات الدين بنجاح"))
+            val msg = if (_language.value == "ar") {
+                if (id > 0L) "تم تحديث بيانات الدين بنجاح" else "تمت إضافة الدين بنجاح"
             } else {
-                _feedback.emit(UserFeedback.Success("تم تسجيل الدين بنجاح"))
+                if (id > 0L) "Debt updated successfully" else "Debt added successfully"
             }
+            _feedback.emit(UserFeedback.Success(msg))
         }
     }
 
@@ -554,22 +570,56 @@ class WalletViewModel(application: Application) : AndroidViewModel(application) 
             withContext(Dispatchers.IO) {
                 repository.deleteDebt(debt)
             }
-            _feedback.emit(UserFeedback.Success("تم حذف الدين بنجاح"))
+            val msg = if (_language.value == "ar") "تم حذف الدين بنجاح" else "Debt deleted successfully"
+            _feedback.emit(UserFeedback.Success(msg))
         }
     }
 
-    fun logDebtPayment(debtId: Long, amount: Double, note: String, paymentDate: Long = System.currentTimeMillis()) {
+    fun logDebtPayment(
+        debt: DebtEntity,
+        amount: Double,
+        note: String = "",
+        updateWalletBalance: Boolean = false
+    ) {
+        if (amount <= 0.0) return
         viewModelScope.launch {
-            val payment = DebtPaymentEntity(
-                debtId = debtId,
-                amount = amount,
-                paymentDateMillis = paymentDate,
-                note = note
-            )
+            val now = System.currentTimeMillis()
             withContext(Dispatchers.IO) {
-                repository.addDebtPayment(payment)
+                repository.addDebtPayment(
+                    DebtPaymentEntity(
+                        debtId = debt.id,
+                        amount = amount,
+                        paymentDateMillis = now,
+                        note = note.trim()
+                    )
+                )
             }
-            _feedback.emit(UserFeedback.Success("تم تسجيل دفعة السداد بنجاح"))
+            if (updateWalletBalance) {
+                val isOwedToMe = debt.type == "OWED_TO_ME"
+                val txType = if (isOwedToMe) "INCOME" else "EXPENSE"
+                val txCategory = if (isOwedToMe) "تحصيل دين" else "سداد دين"
+                val txNote = if (note.isNotBlank()) {
+                    "${debt.personName} - ${note.trim()}"
+                } else {
+                    debt.personName
+                }
+                saveTransaction(
+                    id = 0L,
+                    type = txType,
+                    amount = amount,
+                    category = txCategory,
+                    paymentMethod = "",
+                    dateMillis = DateFilterUtils.getStartOfDay(now),
+                    endDateMillis = null,
+                    notes = txNote,
+                    isPinned = false,
+                    receiptUri = null,
+                    receiptMimeType = null
+                )
+            } else {
+                val msg = if (_language.value == "ar") "تم تسجيل الدفعة بنجاح" else "Payment recorded successfully"
+                _feedback.emit(UserFeedback.Success(msg))
+            }
         }
     }
 
@@ -578,7 +628,8 @@ class WalletViewModel(application: Application) : AndroidViewModel(application) 
             withContext(Dispatchers.IO) {
                 repository.deleteDebtPayment(payment)
             }
-            _feedback.emit(UserFeedback.Success("تم حذف الدفعة بنجاح"))
+            val msg = if (_language.value == "ar") "تم حذف الدفعة من السجل" else "Payment removed from history"
+            _feedback.emit(UserFeedback.Success(msg))
         }
     }
 
@@ -689,56 +740,6 @@ class WalletViewModel(application: Application) : AndroidViewModel(application) 
                 }
             } catch (e: Exception) {
                 _feedback.emit(UserFeedback.Error(e.localizedMessage ?: "فشل في مشاركة التقرير"))
-            } finally {
-                _isGeneratingPdf.value = false
-            }
-        }
-    }
-
-    fun exportDebtsPdf(context: Context, share: Boolean = false) {
-        viewModelScope.launch {
-            _isGeneratingPdf.value = true
-            try {
-                val debts = allDebtsWithPayments.value.map { it.toDebtRecord() }
-                if (debts.isEmpty()) {
-                    _feedback.emit(UserFeedback.Error(if (_language.value == "ar") "لا توجد ديون مسجلة لتصدير التقرير" else "No debts recorded to export"))
-                    return@launch
-                }
-                val currencySymbol = getCurrencySymbol()
-                val result = withContext(Dispatchers.IO) {
-                    PdfExporter.exportDebtsPdfReport(
-                        context = context,
-                        debts = debts,
-                        currencySymbol = currencySymbol,
-                        share = share
-                    )
-                }
-                if (!share) {
-                    when (result) {
-                        is PdfExporter.SaveResult.Success -> {
-                            val msg = if (_language.value == "ar") {
-                                "تم حفظ تقرير الديون في مجلد التنزيلات: ${result.fileName}"
-                            } else {
-                                "Debts report saved to Downloads: ${result.fileName}"
-                            }
-                            val actionLabel = if (_language.value == "ar") "فتح" else "Open"
-                            _feedback.emit(
-                                UserFeedback.Success(
-                                    message = msg,
-                                    actionLabel = actionLabel,
-                                    action = { PdfExporter.openPdf(context, result.uri, result.file) }
-                                )
-                            )
-                        }
-                        is PdfExporter.SaveResult.Failure -> {
-                            _feedback.emit(UserFeedback.Error(result.errorMessage))
-                        }
-                    }
-                } else if (result is PdfExporter.SaveResult.Failure) {
-                    _feedback.emit(UserFeedback.Error(result.errorMessage))
-                }
-            } catch (e: Exception) {
-                _feedback.emit(UserFeedback.Error(e.localizedMessage ?: "حدث خطأ أثناء تصدير تقرير الديون"))
             } finally {
                 _isGeneratingPdf.value = false
             }
@@ -908,80 +909,15 @@ class WalletViewModel(application: Application) : AndroidViewModel(application) 
                 }
 
                 val msg = if (_language.value == "ar") {
-                    "تمت استعادة البيانات بنجاح: ${backupPackage.transactions.size} معاملة، ${backupPackage.debts.size} ديون"
+                    "تمت استعادة البيانات بنجاح: ${backupPackage.transactions.size} معاملة و ${backupPackage.debts.size} دين"
                 } else {
-                    "Data restored successfully: ${backupPackage.transactions.size} transactions, ${backupPackage.debts.size} debts"
+                    "Data restored successfully: ${backupPackage.transactions.size} transactions and ${backupPackage.debts.size} debts"
                 }
                 _feedback.emit(UserFeedback.Success(msg))
             } catch (e: Exception) {
                 _feedback.emit(UserFeedback.Error("فشلت استعادة البيانات: ${e.localizedMessage}"))
             } finally {
                 _isRestoring.value = false
-            }
-        }
-    }
-
-    fun exportDebtsPdfToDownloads(context: Context) {
-        viewModelScope.launch {
-            _isGeneratingPdf.value = true
-            try {
-                val debts = allDebtsWithPayments.value.map { it.toDebtRecord() }
-                val result = withContext(Dispatchers.IO) {
-                    PdfExporter.exportDebtsPdfReport(
-                        context = context,
-                        debts = debts,
-                        currencySymbol = getCurrencySymbol(),
-                        share = false
-                    )
-                }
-                when (result) {
-                    is PdfExporter.SaveResult.Success -> {
-                        val msg = if (_language.value == "ar") {
-                            "تم حفظ تقرير الديون في مجلد التنزيلات بنجاح: ${result.fileName}"
-                        } else {
-                            "Debts report saved to Downloads: ${result.fileName}"
-                        }
-                        val actionLabel = if (_language.value == "ar") "فتح" else "Open"
-                        _feedback.emit(
-                            UserFeedback.Success(
-                                message = msg,
-                                actionLabel = actionLabel,
-                                action = { PdfExporter.openPdf(context, result.uri, result.file) }
-                            )
-                        )
-                    }
-                    is PdfExporter.SaveResult.Failure -> {
-                        _feedback.emit(UserFeedback.Error(result.errorMessage))
-                    }
-                }
-            } catch (e: Exception) {
-                _feedback.emit(UserFeedback.Error(e.localizedMessage ?: "حدث خطأ أثناء تصدير تقرير الديون"))
-            } finally {
-                _isGeneratingPdf.value = false
-            }
-        }
-    }
-
-    fun shareDebtsPdf(context: Context) {
-        viewModelScope.launch {
-            _isGeneratingPdf.value = true
-            try {
-                val debts = allDebtsWithPayments.value.map { it.toDebtRecord() }
-                val result = withContext(Dispatchers.IO) {
-                    PdfExporter.exportDebtsPdfReport(
-                        context = context,
-                        debts = debts,
-                        currencySymbol = getCurrencySymbol(),
-                        share = true
-                    )
-                }
-                if (result is PdfExporter.SaveResult.Failure) {
-                    _feedback.emit(UserFeedback.Error(result.errorMessage))
-                }
-            } catch (e: Exception) {
-                _feedback.emit(UserFeedback.Error(e.localizedMessage ?: "فشل في مشاركة التقرير"))
-            } finally {
-                _isGeneratingPdf.value = false
             }
         }
     }
@@ -998,8 +934,6 @@ class WalletViewModel(application: Application) : AndroidViewModel(application) 
                 .remove("custom_category_icons")
                 .apply()
             FinancialConstants.setCustomIconOverrides(emptyMap())
-            val msg = if (_language.value == "ar") "تم مسح وتصفير كافة البيانات بنجاح" else "All data reset successfully"
-            _feedback.emit(UserFeedback.Success(msg))
         }
     }
 

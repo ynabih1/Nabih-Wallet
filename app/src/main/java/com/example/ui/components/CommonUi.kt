@@ -1,8 +1,8 @@
 package com.example.ui.components
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
@@ -19,25 +19,26 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowDownward
-import androidx.compose.material.icons.filled.ArrowUpward
-import androidx.compose.material.icons.filled.CalendarMonth
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.Edit
-import androidx.compose.material.icons.filled.MoreVert
-import androidx.compose.material.icons.filled.PushPin
+import androidx.compose.material.icons.outlined.CalendarMonth
+import androidx.compose.material.icons.outlined.Edit
+import androidx.compose.material.icons.outlined.MoreVert
+import androidx.compose.material.icons.outlined.PushPin
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.DatePicker
+import androidx.compose.material3.DatePickerDefaults
 import androidx.compose.material3.DatePickerDialog
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberDatePickerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -52,21 +53,25 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.data.local.entity.TransactionEntity
 import com.example.model.FinancialConstants
-import com.example.ui.theme.BorderSubtle
-import com.example.ui.theme.BurntOrangePrimary
-import com.example.ui.theme.MutedExpenseLight
-import com.example.ui.theme.MutedExpenseTerracotta
-import com.example.ui.theme.MutedIncomeGreen
-import com.example.ui.theme.MutedIncomeGreenLight
-import com.example.ui.theme.TextMutedBrown
-import com.example.ui.theme.TextPrimaryDark
-import com.example.ui.theme.TextSecondaryBrown
-import com.example.ui.theme.WarmCardSurface
+import com.example.ui.theme.AppBackground
+import com.example.ui.theme.CardSurface
+import com.example.ui.theme.DividerBorderColor
+import com.example.ui.theme.ElevatedSurface
+import com.example.ui.theme.ExpenseRed
+import com.example.ui.theme.IncomeGreen
+import com.example.ui.theme.InputChipSurface
+import com.example.ui.theme.OnSpotifyGreen
+import com.example.ui.theme.SpotifyGreen
+import com.example.ui.theme.TextMuted
+import com.example.ui.theme.TextPrimary
+import com.example.ui.theme.TextSecondary
+import com.example.ui.theme.XBlue
 import java.text.NumberFormat
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -129,16 +134,15 @@ fun TransactionRowItem(
 ) {
     val isIncome = transaction.type == "INCOME"
     val amountPrefix = if (isIncome) "+" else "-"
-    val amountColor = if (isIncome) MutedIncomeGreen else MutedExpenseTerracotta
+    val amountColor = if (isIncome) IncomeGreen else ExpenseRed
     val categoryIcon = FinancialConstants.getCategoryIcon(transaction.category)
-    val categoryColor = FinancialConstants.getCategoryColor(transaction.category)
 
     var showMenu by remember { mutableStateOf(false) }
 
-    Surface(
+    Column(
         modifier = modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(18.dp))
+            .background(AppBackground)
             .combinedClickable(
                 onClick = { onClick() },
                 onLongClick = {
@@ -149,53 +153,41 @@ fun TransactionRowItem(
                     }
                 }
             )
-            .testTag("transaction_item_${transaction.id}"),
-        color = MaterialTheme.colorScheme.surface,
-        shape = RoundedCornerShape(18.dp),
-        shadowElevation = 0.5.dp,
-        border = androidx.compose.foundation.BorderStroke(1.dp, BorderSubtle)
+            .testTag("transaction_item_${transaction.id}")
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 14.dp, vertical = 12.dp),
+                .padding(horizontal = 4.dp, vertical = 14.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // Category Icon in soft tinted circle
-            Box(
-                modifier = Modifier
-                    .size(44.dp)
-                    .clip(CircleShape)
-                    .background(categoryColor.copy(alpha = 0.12f)),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    imageVector = categoryIcon,
-                    contentDescription = null,
-                    tint = categoryColor,
-                    modifier = Modifier.size(22.dp)
-                )
-            }
+            // Flat 24dp outlined icon with NO colored background box/circle
+            Icon(
+                imageVector = categoryIcon,
+                contentDescription = null,
+                tint = TextSecondary,
+                modifier = Modifier.size(24.dp)
+            )
 
-            Spacer(modifier = Modifier.width(12.dp))
+            Spacer(modifier = Modifier.width(14.dp))
 
             Column(modifier = Modifier.weight(1f)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(
                         text = FinancialConstants.normalizeCategoryName(transaction.category),
                         style = MaterialTheme.typography.bodyLarge,
-                        fontWeight = FontWeight.SemiBold,
-                        color = TextPrimaryDark,
+                        fontWeight = FontWeight.Bold,
+                        color = TextPrimary,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
                     )
                     if (transaction.isPinned) {
                         Spacer(modifier = Modifier.width(6.dp))
                         Icon(
-                            imageVector = Icons.Default.PushPin,
+                            imageVector = Icons.Outlined.PushPin,
                             contentDescription = if (isArabic) "مثبت" else "Pinned",
-                            tint = BurntOrangePrimary,
-                            modifier = Modifier.size(13.dp)
+                            tint = XBlue,
+                            modifier = Modifier.size(16.dp)
                         )
                     }
                 }
@@ -205,91 +197,134 @@ fun TransactionRowItem(
                 Text(
                     text = Formatters.formatDate(transaction.dateMillis, isArabic),
                     style = MaterialTheme.typography.bodySmall,
-                    color = TextSecondaryBrown,
-                    fontSize = 11.5.sp
+                    color = TextSecondary,
+                    fontSize = 12.sp
                 )
             }
 
-            Spacer(modifier = Modifier.width(6.dp))
+            Spacer(modifier = Modifier.width(8.dp))
 
-            // Amount pill with soft tinted background
-            Surface(
-                shape = RoundedCornerShape(10.dp),
-                color = if (isIncome) MutedIncomeGreenLight.copy(alpha = 0.7f) else MutedExpenseLight.copy(alpha = 0.7f),
-                border = androidx.compose.foundation.BorderStroke(0.8.dp, amountColor.copy(alpha = 0.25f))
-            ) {
-                Text(
-                    text = "$amountPrefix${Formatters.formatMoney(transaction.amount)} $currencySymbol",
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold,
-                    color = amountColor,
-                    fontSize = 12.5.sp,
-                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
-                )
-            }
+            Text(
+                text = "$amountPrefix${Formatters.formatMoney(transaction.amount)} $currencySymbol",
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold,
+                color = amountColor,
+                fontSize = 14.sp
+            )
 
-            // Quick overflow options button (⋮)
-            Box {
-                IconButton(
-                    onClick = { showMenu = true },
-                    modifier = Modifier.size(32.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.MoreVert,
-                        contentDescription = if (isArabic) "خيارات إضافية" else "Options",
-                        tint = TextSecondaryBrown,
-                        modifier = Modifier.size(17.dp)
-                    )
-                }
+            // Quick overflow options button
+            if (onQuickChangeDate != null) {
+                Spacer(modifier = Modifier.width(4.dp))
+                Box {
+                    IconButton(
+                        onClick = { showMenu = true },
+                        modifier = Modifier.size(36.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Outlined.MoreVert,
+                            contentDescription = if (isArabic) "خيارات إضافية" else "Options",
+                            tint = TextMuted,
+                            modifier = Modifier.size(24.dp)
+                        )
+                    }
 
-                DropdownMenu(
-                    expanded = showMenu,
-                    onDismissRequest = { showMenu = false }
-                ) {
-                    DropdownMenuItem(
-                        text = {
-                            Text(
-                                text = if (isArabic) "تغيير التاريخ" else "Change Date",
-                                fontSize = 13.sp,
-                                fontWeight = FontWeight.Medium
-                            )
-                        },
-                        leadingIcon = {
-                            Icon(
-                                imageVector = Icons.Default.CalendarMonth,
-                                contentDescription = null,
-                                tint = BurntOrangePrimary,
-                                modifier = Modifier.size(18.dp)
-                            )
-                        },
-                        onClick = {
-                            showMenu = false
-                            onQuickChangeDate?.invoke(transaction)
-                        }
-                    )
-                    DropdownMenuItem(
-                        text = {
-                            Text(
-                                text = if (isArabic) "تعديل العملية" else "Edit Transaction",
-                                fontSize = 13.sp,
-                                fontWeight = FontWeight.Medium
-                            )
-                        },
-                        leadingIcon = {
-                            Icon(
-                                imageVector = Icons.Default.Edit,
-                                contentDescription = null,
-                                tint = TextSecondaryBrown,
-                                modifier = Modifier.size(18.dp)
-                            )
-                        },
-                        onClick = {
-                            showMenu = false
-                            onClick()
-                        }
-                    )
+                    DropdownMenu(
+                        expanded = showMenu,
+                        onDismissRequest = { showMenu = false },
+                        containerColor = ElevatedSurface
+                    ) {
+                        DropdownMenuItem(
+                            text = {
+                                Text(
+                                    text = if (isArabic) "تغيير التاريخ" else "Change Date",
+                                    fontSize = 13.sp,
+                                    fontWeight = FontWeight.Medium,
+                                    color = TextPrimary
+                                )
+                            },
+                            leadingIcon = {
+                                Icon(
+                                    imageVector = Icons.Outlined.CalendarMonth,
+                                    contentDescription = null,
+                                    tint = TextSecondary,
+                                    modifier = Modifier.size(24.dp)
+                                )
+                            },
+                            onClick = {
+                                showMenu = false
+                                onQuickChangeDate(transaction)
+                            }
+                        )
+                        DropdownMenuItem(
+                            text = {
+                                Text(
+                                    text = if (isArabic) "تعديل العملية" else "Edit Transaction",
+                                    fontSize = 13.sp,
+                                    fontWeight = FontWeight.Medium,
+                                    color = TextPrimary
+                                )
+                            },
+                            leadingIcon = {
+                                Icon(
+                                    imageVector = Icons.Outlined.Edit,
+                                    contentDescription = null,
+                                    tint = TextSecondary,
+                                    modifier = Modifier.size(24.dp)
+                                )
+                            },
+                            onClick = {
+                                showMenu = false
+                                onClick()
+                            }
+                        )
+                    }
                 }
             }
+        }
+
+        // Thin flat divider #2F3336 between rows
+        HorizontalDivider(color = DividerBorderColor, thickness = 0.6.dp)
+    }
+}
+
+@Composable
+fun TransactionFilterChip(
+    text: String,
+    selected: Boolean,
+    onClick: () -> Unit,
+    testTag: String,
+    modifier: Modifier = Modifier,
+    @Suppress("UNUSED_PARAMETER") activeColor: Color = SpotifyGreen
+) {
+    // Spotify-style filter chip: fully rounded pill, #1DB954 + black text when selected, #2A2A2A + white text when unselected
+    val bg = if (selected) SpotifyGreen else InputChipSurface
+    val textColor = if (selected) OnSpotifyGreen else TextPrimary
+
+    Surface(
+        shape = CircleShape,
+        color = bg,
+        shadowElevation = 0.dp,
+        modifier = modifier
+            .height(36.dp)
+            .clip(CircleShape)
+            .clickable { onClick() }
+            .testTag(testTag)
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(horizontal = 16.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            Text(
+                text = text,
+                style = MaterialTheme.typography.bodyMedium,
+                fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
+                color = textColor,
+                fontSize = 12.5.sp,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
         }
     }
 }
@@ -308,28 +343,21 @@ fun QuickChangeDateDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
+        containerColor = ElevatedSurface,
         title = {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Box(
-                    modifier = Modifier
-                        .size(32.dp)
-                        .clip(CircleShape)
-                        .background(BurntOrangePrimary.copy(alpha = 0.12f)),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.CalendarMonth,
-                        contentDescription = null,
-                        tint = BurntOrangePrimary,
-                        modifier = Modifier.size(18.dp)
-                    )
-                }
-                Spacer(modifier = Modifier.width(8.dp))
+                Icon(
+                    imageVector = Icons.Outlined.CalendarMonth,
+                    contentDescription = null,
+                    tint = TextPrimary,
+                    modifier = Modifier.size(24.dp)
+                )
+                Spacer(modifier = Modifier.width(10.dp))
                 Text(
                     text = if (isArabic) "تغيير التاريخ" else "Change Date",
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold,
-                    color = TextPrimaryDark
+                    color = TextPrimary
                 )
             }
         },
@@ -338,8 +366,8 @@ fun QuickChangeDateDialog(
                 // Transaction preview row
                 Surface(
                     shape = RoundedCornerShape(12.dp),
-                    color = WarmCardSurface,
-                    border = androidx.compose.foundation.BorderStroke(0.6.dp, BorderSubtle),
+                    color = CardSurface,
+                    border = BorderStroke(0.6.dp, DividerBorderColor),
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Row(
@@ -351,13 +379,13 @@ fun QuickChangeDateDialog(
                             text = FinancialConstants.normalizeCategoryName(transaction.category),
                             fontWeight = FontWeight.SemiBold,
                             fontSize = 13.sp,
-                            color = TextPrimaryDark
+                            color = TextPrimary
                         )
                         Text(
                             text = "${Formatters.formatMoney(transaction.amount)} $currencySymbol",
                             fontWeight = FontWeight.Bold,
                             fontSize = 13.sp,
-                            color = if (transaction.type == "INCOME") MutedIncomeGreen else MutedExpenseTerracotta
+                            color = if (transaction.type == "INCOME") IncomeGreen else ExpenseRed
                         )
                     }
                 }
@@ -366,9 +394,9 @@ fun QuickChangeDateDialog(
 
                 Text(
                     text = if (isArabic) "اختر التاريخ:" else "Select date:",
-                    fontSize = 11.5.sp,
+                    fontSize = 12.sp,
                     fontWeight = FontWeight.Medium,
-                    color = TextSecondaryBrown
+                    color = TextSecondary
                 )
 
                 Spacer(modifier = Modifier.height(8.dp))
@@ -381,8 +409,8 @@ fun QuickChangeDateDialog(
                         .clip(RoundedCornerShape(10.dp))
                         .clickable { showDatePicker = true },
                     shape = RoundedCornerShape(10.dp),
-                    color = Color.White,
-                    border = androidx.compose.foundation.BorderStroke(0.8.dp, BorderSubtle)
+                    color = InputChipSurface,
+                    border = BorderStroke(0.8.dp, DividerBorderColor)
                 ) {
                     Row(
                         modifier = Modifier
@@ -394,37 +422,46 @@ fun QuickChangeDateDialog(
                         Text(
                             text = if (isArabic) "التاريخ:" else "Date:",
                             fontSize = 12.sp,
-                            color = TextSecondaryBrown
+                            color = TextSecondary
                         )
                         Text(
                             text = Formatters.formatDate(selectedDateMillis, isArabic),
                             fontSize = 13.sp,
                             fontWeight = FontWeight.Bold,
-                            color = TextPrimaryDark
+                            color = TextPrimary
                         )
                     }
                 }
             }
         },
         confirmButton = {
-            TextButton(
+            Button(
                 onClick = {
                     onConfirm(selectedDateMillis)
                     onDismiss()
-                }
+                },
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = SpotifyGreen,
+                    contentColor = OnSpotifyGreen
+                ),
+                shape = CircleShape
             ) {
                 Text(
                     text = if (isArabic) "حفظ التغيير" else "Save Change",
-                    color = BurntOrangePrimary,
+                    color = OnSpotifyGreen,
                     fontWeight = FontWeight.Bold
                 )
             }
         },
         dismissButton = {
-            TextButton(onClick = onDismiss) {
+            OutlinedButton(
+                onClick = onDismiss,
+                shape = CircleShape,
+                border = BorderStroke(1.dp, DividerBorderColor)
+            ) {
                 Text(
                     text = if (isArabic) "إلغاء" else "Cancel",
-                    color = TextSecondaryBrown
+                    color = TextPrimary
                 )
             }
         }
@@ -437,25 +474,53 @@ fun QuickChangeDateDialog(
         val datePickerState = rememberDatePickerState(initialSelectedDateMillis = initialUtc)
         DatePickerDialog(
             onDismissRequest = { showDatePicker = false },
+            colors = DatePickerDefaults.colors(containerColor = ElevatedSurface),
             confirmButton = {
-                TextButton(
+                Button(
                     onClick = {
                         datePickerState.selectedDateMillis?.let { utc ->
                             selectedDateMillis = DateFilterUtils.utcMillisToLocalStartOfDay(utc)
                         }
                         showDatePicker = false
-                    }
+                    },
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = SpotifyGreen,
+                        contentColor = OnSpotifyGreen
+                    ),
+                    shape = CircleShape
                 ) {
-                    Text(if (isArabic) "تأكيد" else "Confirm", color = BurntOrangePrimary, fontWeight = FontWeight.Bold)
+                    Text(if (isArabic) "تأكيد" else "Confirm", color = OnSpotifyGreen, fontWeight = FontWeight.Bold)
                 }
             },
             dismissButton = {
-                TextButton(onClick = { showDatePicker = false }) {
-                    Text(if (isArabic) "إلغاء" else "Cancel", color = TextSecondaryBrown)
+                OutlinedButton(
+                    onClick = { showDatePicker = false },
+                    shape = CircleShape,
+                    border = BorderStroke(1.dp, DividerBorderColor)
+                ) {
+                    Text(if (isArabic) "إلغاء" else "Cancel", color = TextPrimary)
                 }
             }
         ) {
-            DatePicker(state = datePickerState)
+            DatePicker(
+                state = datePickerState,
+                colors = DatePickerDefaults.colors(
+                    containerColor = ElevatedSurface,
+                    titleContentColor = TextPrimary,
+                    headlineContentColor = SpotifyGreen,
+                    weekdayContentColor = TextSecondary,
+                    subheadContentColor = TextPrimary,
+                    yearContentColor = TextPrimary,
+                    currentYearContentColor = SpotifyGreen,
+                    selectedYearContainerColor = SpotifyGreen,
+                    selectedYearContentColor = OnSpotifyGreen,
+                    dayContentColor = TextPrimary,
+                    selectedDayContainerColor = SpotifyGreen,
+                    selectedDayContentColor = OnSpotifyGreen,
+                    todayDateBorderColor = SpotifyGreen,
+                    todayContentColor = SpotifyGreen
+                )
+            )
         }
     }
 }
@@ -474,10 +539,9 @@ fun EmptyStateView(
         modifier = modifier
             .fillMaxWidth()
             .testTag(testTag),
-        shape = RoundedCornerShape(16.dp),
-        color = WarmCardSurface,
-        border = androidx.compose.foundation.BorderStroke(1.dp, BorderSubtle),
-        shadowElevation = 0.5.dp
+        shape = RoundedCornerShape(12.dp),
+        color = CardSurface,
+        shadowElevation = 0.dp
     ) {
         Column(
             modifier = Modifier
@@ -486,29 +550,21 @@ fun EmptyStateView(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center
         ) {
-            Box(
-                modifier = Modifier
-                    .size(64.dp)
-                    .clip(CircleShape)
-                    .background(com.example.ui.theme.BurntOrangeLight.copy(alpha = 0.35f)),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    imageVector = icon,
-                    contentDescription = null,
-                    tint = BurntOrangePrimary,
-                    modifier = Modifier.size(32.dp)
-                )
-            }
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                tint = TextSecondary,
+                modifier = Modifier.size(24.dp)
+            )
 
-            Spacer(modifier = Modifier.height(16.dp))
+            Spacer(modifier = Modifier.height(14.dp))
 
             Text(
                 text = title,
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.Bold,
-                color = TextPrimaryDark,
-                textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                color = TextPrimary,
+                textAlign = TextAlign.Center
             )
 
             Spacer(modifier = Modifier.height(8.dp))
@@ -516,24 +572,25 @@ fun EmptyStateView(
             Text(
                 text = description,
                 style = MaterialTheme.typography.bodySmall,
-                color = TextSecondaryBrown,
-                textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                color = TextSecondary,
+                textAlign = TextAlign.Center,
                 lineHeight = 20.sp
             )
 
             if (actionText != null && onAction != null) {
                 Spacer(modifier = Modifier.height(20.dp))
-                androidx.compose.material3.Button(
+                Button(
                     onClick = onAction,
-                    shape = RoundedCornerShape(12.dp),
-                    colors = androidx.compose.material3.ButtonDefaults.buttonColors(
-                        containerColor = BurntOrangePrimary
+                    shape = CircleShape,
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = SpotifyGreen,
+                        contentColor = OnSpotifyGreen
                     ),
                     modifier = Modifier.testTag("${testTag}_action_btn")
                 ) {
                     Text(
                         text = actionText,
-                        color = Color.White,
+                        color = OnSpotifyGreen,
                         fontWeight = FontWeight.Bold,
                         fontSize = 13.sp
                     )
