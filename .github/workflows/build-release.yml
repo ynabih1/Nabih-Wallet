@@ -70,6 +70,14 @@ jobs:
             exit 1
           fi
 
+          SHA256_FP=$(keytool -list -v -keystore "$KS_PATH" -alias upload -storepass "$KEYSTORE_PASS" | grep -i "SHA256:" | sed -E 's/.*SHA256:\s*//')
+          {
+            echo "### SHA-256 Certificate Fingerprint"
+            echo "\`\`\`text"
+            echo "$SHA256_FP"
+            echo "\`\`\`"
+          } >> "$GITHUB_STEP_SUMMARY"
+
           # Names expected by app/build.gradle.kts
           echo "KEYSTORE_PATH=$KS_PATH" >> "$GITHUB_ENV"
           echo "STORE_PASSWORD=$KEYSTORE_PASS" >> "$GITHUB_ENV"
