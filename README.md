@@ -1,19 +1,19 @@
-# محفظة نبيه | Nabih Wallet
+# Nabih Wallet
 
-تطبيق شخصي بسيط وسريع لإدارة المصروفات والديون اليومية، مصمم بواجهة عربية داكنة ومريحة للعين.
-
----
-
-## عن التطبيق
-
-يساعدك تطبيق **محفظة نبيه** على متابعة أموالك اليومية بسهولة ووضوح في مكان واحد، بدءاً من تسجيل الدخل والمصروفات وحتى متابعة الديون وتصدير التقارير المالية.
+A simple, fast personal finance and debt tracker for Android with a sleek dark interface.
 
 ---
 
-## المميزات الأساسية
+## Overview
 
-- **إدارة المعاملات اليومية:** تسجيل عمليات الدخل والمصروفات بسهولة وتصنيفها حسب الفئات المخصصة.
-- **متابعة الديون:** تنظيم المبالغ المستحقة لك (**مستحق لي**) والمبالغ المستحقة عليك (**عليّ**) مع تسجيل الدفعات الجزئية وحساب المتبقي تلقائياً.
-- **التقارير المالية:** عرض ملخص واضح للمصروفات وتوزيع الفئات وسجل الشهور، مع إمكانية تصدير التقرير بصيغة **PDF**.
-- **النسخ الاحتياطي والاستعادة:** حفظ نسخة احتياطية كاملة من بياناتك واستعادتها في أي وقت بأمان تام.
-- **تصميم داكن ومريح:** واجهة عربية بسيطة وسريعة بالوضع الداكن لسهولة الاستخدام اليومي.
+**Nabih Wallet** helps you effortlessly track your daily income and expenses, manage money you owe or are owed, and export clean PDF financial statements—all in one lightweight app.
+
+---
+
+## Key Features
+
+- **Daily Transactions:** Quickly log income and expenses organized by customizable categories.
+- **Debt Management:** Track money owed to you (**Owed to Me**) and money you owe others (**I Owe**), with partial payment logging and automatic remaining balance calculation.
+- **Financial Reports:** View clear category breakdowns and monthly spending history, and export reports directly to **PDF**.
+- **Backup & Restore:** Safely back up all your financial data locally and restore it anytime.
+- **Modern Dark Interface:** Designed with a clean, distraction-free dark theme for comfortable everyday use.
