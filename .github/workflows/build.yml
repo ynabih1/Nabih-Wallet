@@ -37,11 +37,6 @@ jobs:
         run: |
           # Create .env file for secrets-gradle-plugin
           touch .env
-          if [ -n "${{ secrets.GEMINI_API_KEY }}" ]; then
-            echo "GEMINI_API_KEY=${{ secrets.GEMINI_API_KEY }}" >> .env
-          elif [ -f .env.example ]; then
-            cp .env.example .env
-          fi
 
           # Decode google-services.json if secret is provided
           if [ -n "${{ secrets.GOOGLE_SERVICES_JSON }}" ]; then
