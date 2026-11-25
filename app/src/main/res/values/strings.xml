@@ -1,0 +1,107 @@
+<resources>
+    <string name="app_name">Nabih Wallet</string>
+    <string name="app_name_arabic">محفظة نبيه</string>
+    <string name="app_version">v3.0.0</string>
+    <string name="currency_egp">ج.م</string>
+
+    <!-- Navigation -->
+    <string name="nav_home">الرئيسية</string>
+    <string name="nav_expenses">المصروفات</string>
+    <string name="nav_debts">الديون</string>
+    <string name="nav_settings">الإعدادات</string>
+
+    <!-- FAB Menu -->
+    <string name="fab_add_expense">مصروف جديد</string>
+    <string name="fab_add_income">دخل جديد</string>
+    <string name="fab_add_debt">دين جديد</string>
+    <string name="cd_open_add_menu">فتح قائمة الإضافة</string>
+    <string name="cd_close_add_menu">إغلاق قائمة الإضافة</string>
+
+    <!-- Home -->
+    <string name="available_balance">الرصيد المتاح</string>
+    <string name="income_label">الدخل</string>
+    <string name="expense_label">المصروف</string>
+    <string name="this_month">هذا الشهر</string>
+    <string name="start_of_month">بداية الشهر</string>
+    <string name="last_7_days">آخر 7 أيام</string>
+    <string name="recent_transactions">العمليات الأخيرة</string>
+    <string name="view_all">عرض الكل</string>
+    <string name="all_transactions_title">كل العمليات</string>
+    <string name="search_transactions_hint">ابحث بالفئة أو الملاحظة...</string>
+    <string name="no_transactions_yet">لا توجد عمليات مسجلة بعد</string>
+    <string name="no_transactions_subtitle">اضغط على زر + لإضافة أول مصروف أو دخل</string>
+    <string name="no_debts_yet">لا توجد ديون</string>
+    <string name="cd_notifications">إعدادات التذكير اليومي</string>
+    <string name="cd_back">رجوع</string>
+    <string name="cd_app_logo">شعار Nabih Wallet</string>
+
+    <!-- Reports -->
+    <string name="export_pdf">تصدير PDF</string>
+    <string name="total_expenses">إجمالي المصروفات</string>
+    <string name="expenses_by_category">المصروفات حسب الفئة</string>
+    <string name="months_history">سجل الشهور</string>
+    <string name="all_months">كل الفترات</string>
+    <string name="pdf_preview_title">معاينة تقرير PDF</string>
+    <string name="save_and_share_pdf">حفظ ومشاركة PDF</string>
+    <string name="pdf_footer_brand">تم التوليد تلقائيًا بواسطة تطبيق Nabih Wallet</string>
+
+    <!-- Debts -->
+    <string name="net_debts">صافي الديون</string>
+    <string name="owed_to_me">مستحق لي</string>
+    <string name="owed_by_me">مستحق علي</string>
+    <string name="filter_all">الكل</string>
+    <string name="pay_installment">تسديد دفعة</string>
+    <string name="fully_paid">تم السداد بالكامل</string>
+    <string name="payment_history">سجل الدفعات</string>
+    <string name="manage_payments">إدارة</string>
+    <string name="manage_payments_title">إدارة سجل الدفعات</string>
+    <string name="confirm_payment">تأكيد السداد</string>
+    <string name="payment_amount_label">مبلغ الدفعة (ج.م)</string>
+    <string name="add_debt_title">إضافة دين جديد</string>
+    <string name="edit_debt_title">تعديل الدين</string>
+    <string name="delete_debt">حذف الدين</string>
+    <string name="person_name_label">اسم الشخص</string>
+    <string name="amount_label">المبلغ (ج.م)</string>
+    <string name="debt_type_owed_by_me">عليّ</string>
+    <string name="debt_type_owed_to_me">لي</string>
+    <string name="done_label">تم</string>
+    <string name="delete_label">حذف</string>
+    <string name="save_label">حفظ</string>
+    <string name="cancel_label">إلغاء</string>
+
+    <!-- Transaction Dialog -->
+    <string name="add_transaction_title">إضافة عملية</string>
+    <string name="edit_transaction_title">تعديل عملية</string>
+    <string name="transaction_type_expense">مصروف</string>
+    <string name="transaction_type_income">دخل</string>
+    <string name="category_label">الفئة</string>
+    <string name="new_category_chip">فئة جديدة</string>
+    <string name="change_date">تغيير</string>
+    <string name="enter_amount_cta">أدخل المبلغ</string>
+    <string name="note_optional_label">ملاحظة (اختياري)</string>
+
+    <!-- Settings -->
+    <string name="settings_appearance_section">المظهر والألوان</string>
+    <string name="settings_theme_mode">مظهر التطبيق</string>
+    <string name="theme_system">تلقائي</string>
+    <string name="theme_light">فاتح</string>
+    <string name="theme_dark">داكن</string>
+    <string name="settings_dynamic_colors">الألوان الديناميكية (Material You)</string>
+    <string name="settings_color_palette">لوحة الألوان</string>
+    <string name="settings_notifications_section">الإشعارات</string>
+    <string name="settings_daily_reminder">التذكير اليومي</string>
+    <string name="settings_customization_section">التخصيص</string>
+    <string name="settings_manage_categories">إدارة وتخصيص الفئات</string>
+    <string name="settings_backup_section">البيانات والنسخ الاحتياطي</string>
+    <string name="settings_export_backup">تصدير نسخة احتياطية</string>
+    <string name="settings_restore_backup">استعادة نسخة احتياطية</string>
+    <string name="settings_app_section">التطبيق</string>
+    <string name="settings_about">حول Nabih Wallet</string>
+    <string name="add_new_category_cta">إضافة فئة جديدة</string>
+
+    <!-- Notification -->
+    <string name="notification_channel_name">التذكير اليومي</string>
+    <string name="notification_channel_desc">تذكير يومي لتسجيل مصروفاتك وإيراداتك في Nabih Wallet</string>
+    <string name="notification_reminder_title">لا تنسَ تسجيل مصروفات اليوم</string>
+    <string name="notification_reminder_body">افتح Nabih Wallet وسجّل عملياتك اليومية في ثوانٍ للحفاظ على دقة ميزانيتك.</string>
+</resources>

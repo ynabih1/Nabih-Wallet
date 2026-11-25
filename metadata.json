@@ -1,0 +1,6 @@
+{
+  "name": "Nabih Wallet",
+  "description": "محفظة نبيه لإدارة المصروفات والدخل والديون بتصميم Material 3 Expressive عربي بالكامل مع تقارير PDF ونسخ احتياطي محلي.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
